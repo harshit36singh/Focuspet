@@ -1,0 +1,63 @@
+name: focus_pet
+description: A retro pixel pet that helps you stay focused by appearing over distraction apps
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Pixel Fonts
+  google_fonts: ^6.1.0
+  
+  # Local Storage
+  shared_preferences: ^2.2.2
+  
+  # Android Platform Channels
+  flutter_foreground_task: ^6.1.0
+  
+  # Overlay Window (for pet display)
+  flutter_overlay_window: ^0.5.0
+  
+  
+  # Permissions
+  permission_handler: ^11.0.1
+  
+  # Animations
+  animations: ^2.0.8
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    # Pet sprite sheets
+    - assets/sprites/dog1_idle.png
+    - assets/sprites/dog1_walk.png
+    - assets/sprites/dog1_attack.png
+    - assets/sprites/dog2_idle.png
+    - assets/sprites/dog2_walk.png
+    - assets/sprites/dog2_attack.png
+    - assets/sprites/cat1_idle.png
+    - assets/sprites/cat1_walk.png
+    - assets/sprites/cat1_attack.png
+    - assets/sprites/cat2_idle.png
+    - assets/sprites/cat2_walk.png
+    - assets/sprites/cat2_attack.png
+    - assets/sprites/rat1_idle.png
+    - assets/sprites/rat1_walk.png
+    - assets/sprites/rat2_idle.png
+    - assets/sprites/rat2_walk.png
+    - assets/sprites/bird1_idle.png
+    - assets/sprites/bird1_walk.png
+    - assets/sprites/bird2_idle.png
+    - assets/sprites/bird2_walk.png
