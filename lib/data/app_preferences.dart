@@ -1,170 +1,99 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/pet_type.dart';
 
-/// Data layer - wraps SharedPreferences
-/// All persistent state lives here (MVVM pattern)
 class AppPreferences {
-  static const String _keySelectedPet = 'selected_pet';
-  static const String _keyInterruptDelayMin = 'interrupt_delay_min';
-  static const String _keyWalkDelaySec = 'walk_delay_sec';
-  static const String _keyReactDelaySec = 'react_delay_sec';
-  static const String _keyMonitoredApps = 'monitored_apps';
-  static const String _keyAlwaysActive = 'always_active';
-  static const String _keySessionCount = 'session_count';
-  static const String _keyTotalTimeInterrupted = 'total_time_interrupted_sec';
-  static const String _keyCurrentStreak = 'current_streak';
-  static const String _keyLongestStreak = 'longest_streak';
-  static const String _keyLastStreakDate = 'last_streak_date';
+  static const _kPet         = 'selected_pet';
+  static const _kDelay       = 'interrupt_delay_min';
+  static const _kWalk        = 'walk_delay_sec';
+  static const _kReact       = 'react_delay_sec';
+  static const _kApps        = 'monitored_apps';
+  static const _kAlways      = 'always_active';
+  static const _kSessions    = 'session_count';
+  static const _kTime        = 'total_time_interrupted_sec';
+  static const _kStreak      = 'current_streak';
+  static const _kLongest     = 'longest_streak';
+  static const _kStreakDate  = 'last_streak_date';
+  static const _kPetName     = 'pet_name';
+  static const _kZoneStart   = 'pet_zone_start'; // 0.0–1.0 fraction of screen width
+  static const _kZoneEnd     = 'pet_zone_end';   // 0.0–1.0 fraction of screen width
 
-  final SharedPreferences _prefs;
+  final SharedPreferences _p;
+  AppPreferences(this._p);
 
-  AppPreferences(this._prefs);
+  static Future<AppPreferences> init() async =>
+      AppPreferences(await SharedPreferences.getInstance());
 
-  static Future<AppPreferences> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    return AppPreferences(prefs);
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  PET SETTINGS
-  // ══════════════════════════════════════════════════════════════════════
-
+  // ── Pet ───────────────────────────────────────────────────────────────
   PetType get selectedPet {
-    final name = _prefs.getString(_keySelectedPet) ?? 'dog1';
-    try {
-      return PetType.values.firstWhere(
-        (p) => p.name == name,
-        orElse: () => PetType.dog1,
-      );
-    } catch (e) {
-      return PetType.dog1;
-    }
+    final n = _p.getString(_kPet) ?? 'dog1';
+    return PetType.values.firstWhere((p) => p.name == n,
+        orElse: () => PetType.dog1);
+  }
+  Future<void> setSelectedPet(PetType v) =>
+      _p.setString(_kPet, v.name);
+
+  // ── Pet name ──────────────────────────────────────────────────────────
+  String get petName => _p.getString(_kPetName) ?? '';
+  Future<void> setPetName(String v) => _p.setString(_kPetName, v);
+
+  // ── Walk zone (fractions of screen width, 0.0–1.0) ───────────────────
+  // Default: full status bar (0.0 → 1.0)
+  double get petZoneStart => _p.getDouble(_kZoneStart) ?? 0.0;
+  double get petZoneEnd   => _p.getDouble(_kZoneEnd)   ?? 1.0;
+  Future<void> setPetZone(double start, double end) async {
+    await _p.setDouble(_kZoneStart, start.clamp(0.0, 1.0));
+    await _p.setDouble(_kZoneEnd,   end.clamp(0.0, 1.0));
   }
 
-  Future<void> setSelectedPet(PetType pet) async {
-    await _prefs.setString(_keySelectedPet, pet.name);
+  // ── Timing ───────────────────────────────────────────────────────────
+  int get interruptDelayMinutes => _p.getInt(_kDelay) ?? 5;
+  Future<void> setInterruptDelayMinutes(int v) => _p.setInt(_kDelay, v);
+
+  int get walkDelaySeconds => _p.getInt(_kWalk) ?? 60;
+  Future<void> setWalkDelaySeconds(int v) => _p.setInt(_kWalk, v);
+
+  int get reactDelaySeconds => _p.getInt(_kReact) ?? 120;
+  Future<void> setReactDelaySeconds(int v) => _p.setInt(_kReact, v);
+
+  // ── Monitored apps ────────────────────────────────────────────────────
+  Set<String> get monitoredApps =>
+      Set<String>.from(_p.getStringList(_kApps) ?? []);
+  Future<void> setMonitoredApps(Set<String> v) =>
+      _p.setStringList(_kApps, v.toList());
+  Future<void> addMonitoredApp(String pkg) async {
+    final s = monitoredApps..add(pkg);
+    await setMonitoredApps(s);
+  }
+  Future<void> removeMonitoredApp(String pkg) async {
+    final s = monitoredApps..remove(pkg);
+    await setMonitoredApps(s);
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  TIMING SETTINGS
-  // ══════════════════════════════════════════════════════════════════════
+  // ── Always active ─────────────────────────────────────────────────────
+  bool get alwaysActive => _p.getBool(_kAlways) ?? false;
+  Future<void> setAlwaysActive(bool v) => _p.setBool(_kAlways, v);
 
-  int get interruptDelayMinutes => _prefs.getInt(_keyInterruptDelayMin) ?? 5;
-  
-  Future<void> setInterruptDelayMinutes(int value) async {
-    await _prefs.setInt(_keyInterruptDelayMin, value);
-  }
+  // ── Stats ─────────────────────────────────────────────────────────────
+  int get sessionCount => _p.getInt(_kSessions) ?? 0;
+  set sessionCount(int v) => _p.setInt(_kSessions, v);
 
-  int get walkDelaySeconds => _prefs.getInt(_keyWalkDelaySec) ?? 60;
-  
-  Future<void> setWalkDelaySeconds(int value) async {
-    await _prefs.setInt(_keyWalkDelaySec, value);
-  }
+  int get totalTimeInterruptedSec => _p.getInt(_kTime) ?? 0;
+  set totalTimeInterruptedSec(int v) => _p.setInt(_kTime, v);
 
-  int get reactDelaySeconds => _prefs.getInt(_keyReactDelaySec) ?? 120;
-  
-  Future<void> setReactDelaySeconds(int value) async {
-    await _prefs.setInt(_keyReactDelaySec, value);
-  }
+  int get currentStreak => _p.getInt(_kStreak) ?? 0;
+  set currentStreak(int v) => _p.setInt(_kStreak, v);
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  MONITORED APPS
-  // ══════════════════════════════════════════════════════════════════════
+  int get longestStreak => _p.getInt(_kLongest) ?? 0;
+  set longestStreak(int v) => _p.setInt(_kLongest, v);
 
-  Set<String> get monitoredApps {
-    final list = _prefs.getStringList(_keyMonitoredApps) ?? [];
-    return Set<String>.from(list);
-  }
+  String get lastStreakDate => _p.getString(_kStreakDate) ?? '';
+  set lastStreakDate(String v) => _p.setString(_kStreakDate, v);
 
-  Future<void> setMonitoredApps(Set<String> apps) async {
-    await _prefs.setStringList(_keyMonitoredApps, apps.toList());
-  }
-
-  Future<void> addMonitoredApp(String packageName) async {
-    final apps = monitoredApps;
-    apps.add(packageName);
-    await setMonitoredApps(apps);
-  }
-
-  Future<void> removeMonitoredApp(String packageName) async {
-    final apps = monitoredApps;
-    apps.remove(packageName);
-    await setMonitoredApps(apps);
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  ALWAYS ACTIVE MODE
-  // ══════════════════════════════════════════════════════════════════════
-
-  bool get alwaysActive => _prefs.getBool(_keyAlwaysActive) ?? false;
-  
-  Future<void> setAlwaysActive(bool value) async {
-    await _prefs.setBool(_keyAlwaysActive, value);
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  STATS
-  // ══════════════════════════════════════════════════════════════════════
-
-  int get sessionCount => _prefs.getInt(_keySessionCount) ?? 0;
-  
-  Future<void> setSessionCount(int value) async {
-    await _prefs.setInt(_keySessionCount, value);
-  }
-
-  Future<void> incrementSessionCount() async {
-    await setSessionCount(sessionCount + 1);
-  }
-
-  int get totalTimeInterruptedSec => _prefs.getInt(_keyTotalTimeInterrupted) ?? 0;
-  
-  Future<void> setTotalTimeInterruptedSec(int value) async {
-    await _prefs.setInt(_keyTotalTimeInterrupted, value);
-  }
-
-  Future<void> addTimeInterrupted(int seconds) async {
-    await setTotalTimeInterruptedSec(totalTimeInterruptedSec + seconds);
-  }
-
-  int get currentStreak => _prefs.getInt(_keyCurrentStreak) ?? 0;
-  
-  Future<void> setCurrentStreak(int value) async {
-    await _prefs.setInt(_keyCurrentStreak, value);
-  }
-
-  int get longestStreak => _prefs.getInt(_keyLongestStreak) ?? 0;
-  
-  Future<void> setLongestStreak(int value) async {
-    await _prefs.setInt(_keyLongestStreak, value);
-  }
-
-  String get lastStreakDate => _prefs.getString(_keyLastStreakDate) ?? '';
-  
-  Future<void> setLastStreakDate(String date) async {
-    await _prefs.setString(_keyLastStreakDate, date);
-  }
-
-  Future<void> updateStreak() async {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    if (lastStreakDate == today) return;
-    
-    await setLastStreakDate(today);
-    final newStreak = currentStreak + 1;
-    await setCurrentStreak(newStreak);
-    
-    if (newStreak > longestStreak) {
-      await setLongestStreak(newStreak);
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  //  HELPERS
-  // ══════════════════════════════════════════════════════════════════════
-
+  // ── Helpers ───────────────────────────────────────────────────────────
   String formatTime(int seconds) {
-    final mins = seconds ~/ 60;
-    final hrs = mins ~/ 60;
-    if (hrs > 0) return '${hrs}h ${mins % 60}m';
-    return '${mins}m';
+    final m = seconds ~/ 60;
+    final h = m ~/ 60;
+    if (h > 0) return '${h}h ${m % 60}m';
+    return '${m}m';
   }
 }

@@ -13,379 +13,435 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Pet name — stored locally and persisted via HomeViewModel
+  late TextEditingController _nameCtrl;
+  bool _editingName = false;
+
   @override
   void initState() {
     super.initState();
+    _nameCtrl = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<HomeViewModel>().checkPermissions();
+      final vm = context.read<HomeViewModel>();
+      vm.checkPermissions();
+      _nameCtrl.text = vm.petName;
     });
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<HomeViewModel>(
-      builder: (context, vm, child) {
-        // Check if permissions are missing
-        if (!vm.hasAllPermissions) {
-          return _buildPermissionScreen(vm);
-        }
-
-        return _buildHomeContent(vm);
+      builder: (context, vm, _) {
+        if (!vm.hasAllPermissions) return _buildPermissionScreen(vm);
+        return _buildHome(vm);
       },
     );
   }
 
-  Widget _buildHomeContent(HomeViewModel vm) {
-    final statusBarHeight = MediaQuery.of(context).padding.top;
-
-    return Column(
-      children: [
-        // Retro title bar
-        Container(
-          padding: EdgeInsets.only(
-            top: statusBarHeight + 16,
-            left: 20,
-            right: 20,
-            bottom: 16,
-          ),
-          decoration: const BoxDecoration(
-            color: PixelTheme.bg,
-            border: Border(
-              bottom: BorderSide(color: PixelTheme.accent, width: 6),
-            ),
-          ),
-          child: Row(
+  // ── Main home layout ──────────────────────────────────────────────────
+  Widget _buildHome(HomeViewModel vm) {
+    final top = MediaQuery.of(context).padding.top;
+    return Column(children: [
+      PixelTitleBar(
+        topPadding: top,
+        title: 'FOCUS PET',
+        trailing: _statusPill(vm.isServiceRunning),
+      ),
+      Expanded(
+        child: SingleChildScrollView(
+          padding:
+              const EdgeInsets.only(left: 14, right: 14, top: 4, bottom: 110),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  '█ FOCUS PET █',
-                  style: PixelTheme.pixelFont(
-                    size: 20,
-                    weight: FontWeight.bold,
-                    color: PixelTheme.accent,
-                    letterSpacing: 0.2,
-                  ),
+              _buildPetHero(vm),
+              const SizedBox(height: 14),
+              PixelSectionLabel('STATS', color: PixelTheme.accent4),
+              const SizedBox(height: 8),
+              _buildStats(vm),
+              const SizedBox(height: 14),
+              PixelSectionLabel('WATCHING', color: PixelTheme.accent),
+              const SizedBox(height: 8),
+              _buildWatching(vm),
+              const SizedBox(height: 14),
+              PixelSectionLabel('SETTINGS', color: PixelTheme.accent5),
+              const SizedBox(height: 8),
+              _buildAlwaysActive(vm),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: PixelButton(
+                  label: vm.isServiceRunning
+                      ? '■  STOP SERVICE'
+                      : '▶  START SERVICE',
+                  color: vm.isServiceRunning
+                      ? PixelTheme.accent2
+                      : PixelTheme.accent3,
+                  onPressed: () async {
+                    if (vm.isServiceRunning) {
+                      await vm.stopService();
+                    } else {
+                      await vm.startService();
+                    }
+                  },
                 ),
               ),
-              _buildStatusIndicator(vm.isServiceRunning),
             ],
           ),
         ),
-
-        // Content
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: 120, // Space for nav
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPetPreviewCard(vm),
-                const SizedBox(height: 16),
-                const PixelSectionLabel('STATS'),
-                const SizedBox(height: 10),
-                _buildStatsGrid(vm),
-                const SizedBox(height: 16),
-                const PixelSectionLabel('WATCHING'),
-                const SizedBox(height: 10),
-                _buildWatchingCard(vm),
-                const SizedBox(height: 16),
-                const PixelSectionLabel('KEEP PET ACTIVE'),
-                const SizedBox(height: 10),
-                _buildAlwaysActiveCard(vm),
-                const SizedBox(height: 16),
-                _buildServiceButton(vm),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+      ),
+    ]);
   }
 
-  Widget _buildStatusIndicator(bool isRunning) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'STATUS:',
-          style: PixelTheme.pixelFont(
-            size: 9,
-            color: PixelTheme.textSecondary,
-            letterSpacing: 0.15,
-          ).copyWith(shadows: []),
-        ),
-        const SizedBox(width: 6),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          child: Text(
-            '●',
-            style: TextStyle(
-              fontSize: 16,
-              color: isRunning ? PixelTheme.accent3 : PixelTheme.textSecondary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPetPreviewCard(HomeViewModel vm) {
+  // ── Pet hero card — centered sprite + editable name ───────────────────
+  Widget _buildPetHero(HomeViewModel vm) {
     return PixelCard(
       fillColor: PixelTheme.surface,
       borderColor: PixelTheme.accent,
       selected: true,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          // Live sprite preview
-          SizedBox(
-            width: 90,
-            height: 90,
-            child: PetSpriteWidget(
-              petType: vm.selectedPetType,
-              state: PetAnimState.idle,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
+      child: Column(children: [
+        // Centered pet sprite
+        Center(
+          child: Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: PixelTheme.bgDark,
+              border:
+                  Border.all(color: PixelTheme.accentDim, width: 2),
+              boxShadow: const [
+                BoxShadow(color: Colors.black, offset: Offset(3, 3))
+              ],
+            ),
+            child: Center(
+              child: SizedBox(
+                width: 72,
+                height: 72,
+                child: PetSpriteWidget(
+                  petType: vm.selectedPetType,
+                  state: PetAnimState.idle,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            '${vm.selectedPetType.emoji}  ${vm.selectedPetType.displayName}',
-            style: PixelTheme.pixelFont(
-              size: 15,
-              weight: FontWeight.bold,
-              color: PixelTheme.accent,
-            ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // Pet name — tap pencil to edit
+        _editingName
+            ? _buildNameField(vm)
+            : _buildNameDisplay(vm),
+
+        const SizedBox(height: 10),
+
+        // Appears-after badge
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: PixelTheme.bgDark,
+            border: Border.all(color: PixelTheme.border, width: 2),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'APPEARS AFTER  ${vm.interruptDelayMinutes}MIN',
-            style: PixelTheme.pixelFont(
-              size: 10,
-              color: PixelTheme.textSecondary,
-              letterSpacing: 0.1,
-            ).copyWith(shadows: []),
+          child: Text(
+            '▶ APPEARS AFTER  ${vm.interruptDelayMinutes} MIN',
+            style: PixelTheme.t8sec,
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
-  Widget _buildStatsGrid(HomeViewModel vm) {
+  Widget _buildNameDisplay(HomeViewModel vm) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Expanded(
-          child: _buildStatCard(
-            '🔥${vm.currentStreak}',
-            'STREAK',
+        Text(
+          vm.petName.isEmpty ? 'MY PET' : vm.petName.toUpperCase(),
+          style: PixelTheme.pixelFont(
+            size: 12,
+            weight: FontWeight.bold,
+            color: PixelTheme.accent,
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildStatCard(
-            '${vm.sessionCount}',
-            'SESSIONS',
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildStatCard(
-            vm.formatTime(vm.totalTimeSavedSec),
-            'SAVED',
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: () {
+            _nameCtrl.text = vm.petName;
+            setState(() => _editingName = true);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: PixelTheme.surfaceHi,
+              border: Border.all(color: PixelTheme.border, width: 2),
+            ),
+            child: Text(
+              '✎',
+              style: PixelTheme.pixelFont(
+                  size: 10, color: PixelTheme.textSec, shadows: []),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatCard(String value, String label) {
-    return PixelCard(
-      fillColor: PixelTheme.surface,
-      borderColor: PixelTheme.border,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-      child: Column(
-        children: [
-          PixelBigValue(value),
-          const SizedBox(height: 4),
-          PixelSectionLabel(label),
-        ],
-      ),
+  Widget _buildNameField(HomeViewModel vm) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 200),
+            decoration: BoxDecoration(
+              color: PixelTheme.bgDark,
+              border: Border.all(color: PixelTheme.accent, width: 2),
+              boxShadow: const [
+                BoxShadow(color: Colors.black, offset: Offset(3, 3))
+              ],
+            ),
+            child: TextField(
+              controller: _nameCtrl,
+              autofocus: true,
+              maxLength: 12,
+              textCapitalization: TextCapitalization.characters,
+              style: PixelTheme.pixelFont(
+                  size: 10,
+                  color: PixelTheme.accent,
+                  shadows: []),
+              decoration: InputDecoration(
+                counterText: '',
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                border: InputBorder.none,
+                hintText: 'NAME...',
+                hintStyle: PixelTheme.pixelFont(
+                    size: 9, color: PixelTheme.textSec, shadows: []),
+              ),
+              cursorColor: PixelTheme.accent,
+              cursorWidth: 2,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () async {
+            await vm.setPetName(_nameCtrl.text.trim());
+            setState(() => _editingName = false);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: PixelTheme.accent,
+              border: Border.all(color: Colors.black, width: 2),
+              boxShadow: const [
+                BoxShadow(color: Colors.black, offset: Offset(3, 3))
+              ],
+            ),
+            child: Text(
+              '✓',
+              style: PixelTheme.pixelFont(
+                  size: 10, color: PixelTheme.bg, shadows: []),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildWatchingCard(HomeViewModel vm) {
-    final apps = vm.monitoredApps.toList();
+  // ── Stats row ──────────────────────────────────────────────────────────
+  Widget _buildStats(HomeViewModel vm) {
+    return Row(children: [
+      Expanded(
+          child: _statCard('🔥', vm.currentStreak.toString(), 'STREAK')),
+      const SizedBox(width: 8),
+      Expanded(
+          child: _statCard('⚡', vm.sessionCount.toString(), 'SESSIONS')),
+      const SizedBox(width: 8),
+      Expanded(
+          child: _statCard(
+              '⏱', vm.formatTime(vm.totalTimeSavedSec), 'SAVED')),
+    ]);
+  }
 
+  Widget _statCard(String icon, String value, String label) {
     return PixelCard(
       fillColor: PixelTheme.surface,
       borderColor: PixelTheme.border,
-      padding: const EdgeInsets.all(16),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(icon, style: const TextStyle(fontSize: 16)),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: PixelTheme.pixelFont(
+              size: 13, weight: FontWeight.bold, color: PixelTheme.accent),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: PixelTheme.t7sec),
+      ]),
+    );
+  }
+
+  // ── Watching card ─────────────────────────────────────────────────────
+  Widget _buildWatching(HomeViewModel vm) {
+    final apps = vm.monitoredApps.toList();
+    return PixelCard(
+      fillColor: PixelTheme.surface,
+      borderColor: PixelTheme.border,
+      padding: const EdgeInsets.all(12),
       child: apps.isEmpty
-          ? Text(
-              'No apps selected',
-              style: PixelTheme.pixelFont(
-                size: 11,
-                color: PixelTheme.textSecondary,
-              ).copyWith(shadows: []),
-            )
+          ? Row(children: [
+              Text('▶ ', style: PixelTheme.t9sec),
+              Text('NO APPS SELECTED', style: PixelTheme.t9sec),
+            ])
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ...apps.take(5).map((pkg) {
-                  final appName = pkg.split('.').last.toUpperCase();
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                ...apps.take(4).map((pkg) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(children: [
+                        Text('▶ ', style: PixelTheme.t9acc),
+                        Expanded(
+                          child: Text(
+                            pkg.split('.').last.toUpperCase(),
+                            style: PixelTheme.t9pri,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ]),
+                    )),
+                if (apps.length > 4)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      '> $appName',
-                      style: PixelTheme.pixelFont(
-                        size: 11,
-                        color: PixelTheme.textPrimary,
-                      ).copyWith(shadows: []),
+                      '  + ${apps.length - 4} MORE',
+                      style: PixelTheme.t8sec,
                     ),
-                  );
-                }),
-                if (apps.length > 5)
-                  PixelSectionLabel('+${apps.length - 5} MORE'),
+                  ),
               ],
             ),
     );
   }
 
-  Widget _buildAlwaysActiveCard(HomeViewModel vm) {
+  // ── Always-active toggle ──────────────────────────────────────────────
+  Widget _buildAlwaysActive(HomeViewModel vm) {
     return PixelCard(
       fillColor: PixelTheme.surface,
       borderColor: PixelTheme.border,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       onTap: () => vm.toggleAlwaysActive(),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: Row(children: [
+        Expanded(
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'ALWAYS SHOW PET',
-                  style: PixelTheme.pixelFont(
-                    size: 12,
-                    weight: FontWeight.bold,
-                    color: PixelTheme.textPrimary,
-                    letterSpacing: 0.05,
-                  ).copyWith(shadows: []),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Pet stays visible at all times',
-                  style: PixelTheme.pixelFont(
-                    size: 10,
-                    color: PixelTheme.textSecondary,
-                  ).copyWith(shadows: []),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: vm.alwaysActive ? PixelTheme.accent : PixelTheme.border,
-              border: Border.all(color: PixelTheme.shadow, width: 3),
-            ),
-            child: Text(
-              vm.alwaysActive ? 'ON' : 'OFF',
-              style: PixelTheme.pixelFont(
-                size: 14,
-                weight: FontWeight.bold,
-                color: vm.alwaysActive ? PixelTheme.bg : PixelTheme.textSecondary,
-                letterSpacing: 0.1,
-              ).copyWith(shadows: []),
-            ),
-          ),
-        ],
+                Text('ALWAYS SHOW PET', style: PixelTheme.t9pri),
+                const SizedBox(height: 5),
+                Text('Pet stays visible at all times',
+                    style: PixelTheme.t8sec),
+              ]),
+        ),
+        const SizedBox(width: 12),
+        PixelToggle(
+            value: vm.alwaysActive, onTap: () => vm.toggleAlwaysActive()),
+      ]),
+    );
+  }
+
+  // ── Status pill ───────────────────────────────────────────────────────
+  Widget _statusPill(bool running) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+          width: 7,
+          height: 7,
+          color: running ? PixelTheme.accent3 : PixelTheme.textSec),
+      const SizedBox(width: 5),
+      Text(
+        running ? 'ON' : 'OFF',
+        style: PixelTheme.pixelFont(
+          size: 7,
+          color: running ? PixelTheme.accent3 : PixelTheme.textSec,
+          shadows: [],
+        ),
       ),
-    );
+    ]);
   }
 
-  Widget _buildServiceButton(HomeViewModel vm) {
-    return PixelButton(
-      label: vm.isServiceRunning ? '[ STOP SERVICE ]' : '[ START SERVICE ]',
-      color: vm.isServiceRunning ? PixelTheme.accent2 : PixelTheme.accent,
-      onPressed: () async {
-        if (vm.isServiceRunning) {
-          await vm.stopService();
-        } else {
-          await vm.startService();
-        }
-      },
-    );
-  }
-
+  // ── Permission screen ─────────────────────────────────────────────────
   Widget _buildPermissionScreen(HomeViewModel vm) {
-    final String permType;
-    final String permIcon;
-    final String permTitle;
-    final String permDesc;
-    final VoidCallback onGrant;
-
-    if (!vm.hasOverlayPermission) {
-      permType = 'OVERLAY';
-      permIcon = '◈';
-      permTitle = 'OVERLAY\nACCESS NEEDED';
-      permDesc = 'Required to show the pet\nover other apps';
-      onGrant = vm.requestOverlayPermission;
-    } else {
-      permType = 'ACCESSIBILITY';
-      permIcon = '⌖';
-      permTitle = 'ACCESSIBILITY\nACCESS NEEDED';
-      permDesc = 'Required to detect when\nyou open monitored apps';
-      onGrant = vm.requestAccessibilityPermission;
-    }
-
-    return Padding(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-        left: 40,
-        right: 40,
+    final bool isOverlay = !vm.hasOverlayPermission;
+    final top = MediaQuery.of(context).padding.top;
+    return Column(children: [
+      PixelTitleBar(topPadding: top, title: 'FOCUS PET'),
+      Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                PixelCard(
+                  fillColor: const Color(0xFF160808),
+                  borderColor: PixelTheme.accent2,
+                  selected: true,
+                  padding: const EdgeInsets.all(22),
+                  child: Column(children: [
+                    Text(
+                      isOverlay ? '◈' : '⌖',
+                      style: const TextStyle(
+                          fontSize: 44, color: PixelTheme.accent2),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '!! WARNING !!',
+                      style: PixelTheme.pixelFont(
+                          size: 10,
+                          color: PixelTheme.accent2,
+                          weight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      isOverlay
+                          ? 'OVERLAY ACCESS\nREQUIRED'
+                          : 'ACCESSIBILITY\nREQUIRED',
+                      style: PixelTheme.pixelFont(
+                          size: 11,
+                          weight: FontWeight.bold,
+                          color: PixelTheme.textPrimary),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isOverlay
+                          ? 'Needed to show pet\nover other apps'
+                          : 'Needed to detect\nmonitored apps',
+                      style: PixelTheme.t8sec,
+                      textAlign: TextAlign.center,
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: PixelButton(
+                    label: '▶ GRANT ACCESS',
+                    onPressed: isOverlay
+                        ? vm.requestOverlayPermission
+                        : vm.requestAccessibilityPermission,
+                  ),
+                ),
+              ]),
+        ),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            permIcon,
-            style: PixelTheme.pixelFont(
-              size: 56,
-              color: PixelTheme.accent,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            permTitle,
-            style: PixelTheme.pixelFont(
-              size: 20,
-              weight: FontWeight.bold,
-              color: PixelTheme.textPrimary,
-              letterSpacing: 0.1,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            permDesc,
-            style: PixelTheme.pixelFont(
-              size: 12,
-              color: PixelTheme.textSecondary,
-            ).copyWith(shadows: []),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 40),
-          PixelButton(
-            label: '[ GRANT ACCESS ]',
-            onPressed: onGrant,
-          ),
-        ],
-      ),
-    );
+    ]);
   }
 }

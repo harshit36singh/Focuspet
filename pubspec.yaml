@@ -61,3 +61,8 @@ flutter:
     - assets/sprites/bird1_walk.png
     - assets/sprites/bird2_idle.png
     - assets/sprites/bird2_walk.png
+    - assets/sprites/appicon.png
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/sprites/appicon.png"

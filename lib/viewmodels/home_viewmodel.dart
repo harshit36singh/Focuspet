@@ -3,7 +3,6 @@ import '../data/app_preferences.dart';
 import '../domain/pet_type.dart';
 import '../services/platform_service.dart';
 
-/// MVVM ViewModel for Home Screen
 class HomeViewModel extends ChangeNotifier {
   final AppPreferences prefs;
   final PlatformService platform;
@@ -12,40 +11,33 @@ class HomeViewModel extends ChangeNotifier {
   bool _hasOverlayPermission = false;
   bool _hasAccessibilityPermission = false;
 
-  HomeViewModel({
-    required this.prefs,
-    required this.platform,
-  }) {
+  HomeViewModel({required this.prefs, required this.platform}) {
     _checkPermissions();
     _checkServiceStatus();
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  GETTERS
-  // ══════════════════════════════════════════════════════════════════════
-
-  bool get isServiceRunning => _isServiceRunning;
-  bool get hasOverlayPermission => _hasOverlayPermission;
+  // ── Getters ───────────────────────────────────────────────────────────
+  bool get isServiceRunning         => _isServiceRunning;
+  bool get hasOverlayPermission     => _hasOverlayPermission;
   bool get hasAccessibilityPermission => _hasAccessibilityPermission;
-  bool get hasAllPermissions => _hasOverlayPermission && _hasAccessibilityPermission;
+  bool get hasAllPermissions        =>
+      _hasOverlayPermission && _hasAccessibilityPermission;
 
-  PetType get selectedPetType => prefs.selectedPet;
-  int get interruptDelayMinutes => prefs.interruptDelayMinutes;
-  int get sessionCount => prefs.sessionCount;
-  int get currentStreak => prefs.currentStreak;
-  int get totalTimeSavedSec => prefs.totalTimeInterruptedSec;
-  bool get alwaysActive => prefs.alwaysActive;
-  Set<String> get monitoredApps => prefs.monitoredApps;
+  PetType get selectedPetType       => prefs.selectedPet;
+  int     get interruptDelayMinutes => prefs.interruptDelayMinutes;
+  int     get sessionCount          => prefs.sessionCount;
+  int     get currentStreak         => prefs.currentStreak;
+  int     get totalTimeSavedSec     => prefs.totalTimeInterruptedSec;
+  bool    get alwaysActive          => prefs.alwaysActive;
+  Set<String> get monitoredApps     => prefs.monitoredApps;
+
+  // Pet name — stored in AppPreferences
+  String get petName => prefs.petName;
 
   String formatTime(int seconds) => prefs.formatTime(seconds);
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  ACTIONS
-  // ══════════════════════════════════════════════════════════════════════
-
-  Future<void> checkPermissions() async {
-    await _checkPermissions();
-  }
+  // ── Actions ───────────────────────────────────────────────────────────
+  Future<void> checkPermissions() => _checkPermissions();
 
   Future<void> requestOverlayPermission() async {
     await platform.requestOverlayPermission();
@@ -77,15 +69,12 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refresh() async {
-    await _checkPermissions();
-    await _checkServiceStatus();
+  Future<void> setPetName(String name) async {
+    await prefs.setPetName(name.isEmpty ? '' : name);
+    notifyListeners();
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  PRIVATE METHODS
-  // ══════════════════════════════════════════════════════════════════════
-
+  // ── Private ───────────────────────────────────────────────────────────
   Future<void> _checkPermissions() async {
     _hasOverlayPermission = await platform.canDrawOverlays();
     _hasAccessibilityPermission = await platform.isAccessibilityEnabled();

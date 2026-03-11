@@ -18,133 +18,160 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+  int _idx = 0;
+
+  late final HomeViewModel _homeVM;
+  late final PetSelectViewModel _petVM;
+  late final AppSelectViewModel _appVM;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = context.read<AppPreferences>();
+    final platform = context.read<PlatformService>();
+    _homeVM = HomeViewModel(prefs: prefs, platform: platform);
+    _petVM = PetSelectViewModel(prefs: prefs, platform: platform);
+    _appVM = AppSelectViewModel(prefs: prefs, platform: platform);
+  }
+
+  @override
+  void dispose() {
+    _homeVM.dispose();
+    _petVM.dispose();
+    _appVM.dispose();
+    super.dispose();
+  }
+
+  // Tab colours — each tab has its own accent
+  static const _tabColors = [
+    PixelTheme.accent,   // HOME — gold
+    PixelTheme.accent4,  // PET  — cyan
+    PixelTheme.accent2,  // APPS — pink
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final prefs = context.read<AppPreferences>();
-    final platform = context.read<PlatformService>();
-
-    // Create ViewModels
-    final homeVM = HomeViewModel(prefs: prefs, platform: platform);
-    final petSelectVM = PetSelectViewModel(prefs: prefs, platform: platform);
-    final appSelectVM = AppSelectViewModel(prefs: prefs, platform: platform);
+    final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Main content
-          IndexedStack(
-            index: _selectedIndex,
-            children: [
-              ChangeNotifierProvider.value(
-                value: homeVM,
-                child: const HomeScreen(),
-              ),
-              ChangeNotifierProvider.value(
-                value: petSelectVM,
-                child: const PetSelectScreen(),
-              ),
-              ChangeNotifierProvider.value(
-                value: appSelectVM,
-                child: const AppSelectScreen(),
-              ),
-            ],
-          ),
-
-          // Floating pixel nav bar
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 20,
-            child: _buildFloatingNav(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFloatingNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: PixelTheme.navBg,
-        border: Border.all(color: PixelTheme.accent, width: 5),
-        borderRadius: BorderRadius.zero,
-        boxShadow: [
-          BoxShadow(
-            color: PixelTheme.shadow.withOpacity(0.5),
-            offset: const Offset(0, 8),
-            blurRadius: 0,
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+      backgroundColor: PixelTheme.bg,
+      body: Stack(children: [
+        // ── Screens ──────────────────────────────────────────────────────
+        IndexedStack(
+          index: _idx,
           children: [
-            _buildNavItem('▲', 'HOME', 0),
-            _buildNavItem('♦', 'PET', 1),
-            _buildNavItem('●', 'APPS', 2),
+            ChangeNotifierProvider.value(
+              value: _homeVM,
+              child: RepaintBoundary(
+                child: TickerMode(
+                  enabled: _idx == 0,
+                  child: const HomeScreen(),
+                ),
+              ),
+            ),
+            ChangeNotifierProvider.value(
+              value: _petVM,
+              child: RepaintBoundary(
+                child: TickerMode(
+                  enabled: _idx == 1,
+                  child: const PetSelectScreen(),
+                ),
+              ),
+            ),
+            ChangeNotifierProvider.value(
+              value: _appVM,
+              child: RepaintBoundary(
+                child: TickerMode(
+                  enabled: _idx == 2,
+                  child: const AppSelectScreen(),
+                ),
+              ),
+            ),
           ],
         ),
-      ),
+
+        // ── Floating Pixel Nav Bar ────────────────────────────────────────
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: bottomPad + 12,
+          child: _buildNav(),
+        ),
+      ]),
     );
   }
 
-  Widget _buildNavItem(String icon, String label, int index) {
-    final isSelected = _selectedIndex == index;
+  Widget _buildNav() {
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        color: PixelTheme.navBg,
+        // Chunky pixel border — accent color of selected tab
+        border: Border.all(color: _tabColors[_idx], width: 2.5),
+        // Hard drop shadow = 90s game window depth
+        boxShadow: [
+          BoxShadow(
+              color: _tabColors[_idx].withOpacity(0.25),
+              offset: const Offset(0, 4),
+              blurRadius: 0),
+          const BoxShadow(
+              color: Colors.black, offset: Offset(4, 4), blurRadius: 0),
+        ],
+      ),
+      child: Row(children: [
+        _navItem(0, '▲', 'HOME'),
+        _navDivider(),
+        _navItem(1, '♦', 'PET'),
+        _navDivider(),
+        _navItem(2, '●', 'APPS'),
+      ]),
+    );
+  }
+
+  Widget _navDivider() => Container(
+        width: 2,
+        height: 64,
+        color: PixelTheme.border,
+      );
+
+  Widget _navItem(int index, String icon, String label) {
+    final active = _idx == index;
+    final color = _tabColors[index];
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedIndex = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          margin: EdgeInsets.only(
-            bottom: isSelected ? 2 : 4,
-            top: isSelected ? 4 : 0,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? PixelTheme.surface : PixelTheme.navBg,
-            border: isSelected 
-                ? Border.all(color: PixelTheme.accent, width: 3)
-                : null,
-            borderRadius: BorderRadius.zero,
-            boxShadow: isSelected ? [] : [
-              BoxShadow(
-                color: PixelTheme.shadow,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+        onTap: () => setState(() => _idx = index),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          color: active ? color.withOpacity(0.10) : Colors.transparent,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // Icon — slightly larger when active
               Text(
                 icon,
                 style: TextStyle(
-                  fontSize: 26,
-                  color: isSelected ? PixelTheme.accent : PixelTheme.textSecondary,
-                  shadows: isSelected ? [
-                    Shadow(
-                      color: PixelTheme.accent.withOpacity(0.5),
-                      blurRadius: 8,
-                    ),
-                  ] : [],
+                  fontSize: active ? 20 : 16,
+                  color: active ? color : PixelTheme.textDim,
                 ),
               ),
               const SizedBox(height: 4),
+              // Label
               Text(
                 label,
                 style: PixelTheme.pixelFont(
-                  size: 9,
+                  size: 7,
                   weight: FontWeight.bold,
-                  color: isSelected ? PixelTheme.accent : PixelTheme.textSecondary,
-                  letterSpacing: 0.2,
-                ).copyWith(
+                  color: active ? color : PixelTheme.textDim,
                   shadows: [],
                 ),
+              ),
+              // Active underline bar
+              const SizedBox(height: 4),
+              Container(
+                height: 2,
+                width: 24,
+                color: active ? color : Colors.transparent,
               ),
             ],
           ),
