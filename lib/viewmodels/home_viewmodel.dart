@@ -7,6 +7,9 @@ class HomeViewModel extends ChangeNotifier {
   final AppPreferences prefs;
   final PlatformService platform;
 
+  // Optional callback — set by MainScreen to prefetch apps post-permission
+  VoidCallback? onPermissionsGranted;
+
   bool _isServiceRunning = false;
   bool _hasOverlayPermission = false;
   bool _hasAccessibilityPermission = false;
@@ -17,22 +20,20 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   // ── Getters ───────────────────────────────────────────────────────────
-  bool get isServiceRunning         => _isServiceRunning;
-  bool get hasOverlayPermission     => _hasOverlayPermission;
+  bool get isServiceRunning           => _isServiceRunning;
+  bool get hasOverlayPermission       => _hasOverlayPermission;
   bool get hasAccessibilityPermission => _hasAccessibilityPermission;
-  bool get hasAllPermissions        =>
+  bool get hasAllPermissions          =>
       _hasOverlayPermission && _hasAccessibilityPermission;
 
-  PetType get selectedPetType       => prefs.selectedPet;
-  int     get interruptDelayMinutes => prefs.interruptDelayMinutes;
-  int     get sessionCount          => prefs.sessionCount;
-  int     get currentStreak         => prefs.currentStreak;
-  int     get totalTimeSavedSec     => prefs.totalTimeInterruptedSec;
-  bool    get alwaysActive          => prefs.alwaysActive;
-  Set<String> get monitoredApps     => prefs.monitoredApps;
-
-  // Pet name — stored in AppPreferences
-  String get petName => prefs.petName;
+  PetType  get selectedPetType       => prefs.selectedPet;
+  int      get interruptDelayMinutes => prefs.interruptDelayMinutes;
+  int      get sessionCount          => prefs.sessionCount;
+  int      get currentStreak         => prefs.currentStreak;
+  int      get totalTimeSavedSec     => prefs.totalTimeInterruptedSec;
+  bool     get alwaysActive          => prefs.alwaysActive;
+  Set<String> get monitoredApps      => prefs.monitoredApps;
+  String   get petName               => prefs.petName;
 
   String formatTime(int seconds) => prefs.formatTime(seconds);
 
@@ -76,9 +77,15 @@ class HomeViewModel extends ChangeNotifier {
 
   // ── Private ───────────────────────────────────────────────────────────
   Future<void> _checkPermissions() async {
-    _hasOverlayPermission = await platform.canDrawOverlays();
+    final hadAll = hasAllPermissions;
+    _hasOverlayPermission       = await platform.canDrawOverlays();
     _hasAccessibilityPermission = await platform.isAccessibilityEnabled();
     notifyListeners();
+
+    // Trigger app prefetch the moment we have all permissions
+    if (!hadAll && hasAllPermissions) {
+      onPermissionsGranted?.call();
+    }
   }
 
   Future<void> _checkServiceStatus() async {
@@ -88,11 +95,13 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<void> _updateNativeSettings() async {
     await platform.updatePetSettings(
-      petType: prefs.selectedPet.name,
+      petType:          prefs.selectedPet.name,
       interruptDelayMin: prefs.interruptDelayMinutes,
-      walkDelaySec: prefs.walkDelaySeconds,
-      reactDelaySec: prefs.reactDelaySeconds,
-      alwaysActive: prefs.alwaysActive,
+      walkDelaySec:     prefs.walkDelaySeconds,
+      reactDelaySec:    prefs.reactDelaySeconds,
+      alwaysActive:     prefs.alwaysActive,
+      petZoneStart:     prefs.petZoneStart,
+      petZoneEnd:       prefs.petZoneEnd,
     );
   }
 }

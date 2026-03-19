@@ -1,321 +1,606 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../viewmodels/app_select_viewmodel.dart';
-import '../theme/pixel_theme.dart';
+import '../../viewmodels/pet_select_viewmodel.dart';
+import '../../domain/pet_type.dart';
+import '../theme/app_theme.dart';
+import '../widgets/pet_sprite_widget.dart';
 
-class AppSelectScreen extends StatefulWidget {
-  const AppSelectScreen({Key? key}) : super(key: key);
-
+class PetSelectScreen extends StatefulWidget {
+  const PetSelectScreen({Key? key}) : super(key: key);
   @override
-  State<AppSelectScreen> createState() => _AppSelectScreenState();
+  State<PetSelectScreen> createState() => _PetSelectScreenState();
 }
 
-class _AppSelectScreenState extends State<AppSelectScreen> {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
+class _PetSelectScreenState extends State<PetSelectScreen> {
+  late PageController _ctrl;
+  int _idx = 0;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = PageController(viewportFraction: 0.52);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final vm = context.read<PetSelectViewModel>();
+      final idx = vm.allPets.indexOf(vm.selectedPet).clamp(0, vm.allPets.length - 1);
+      _idx = idx;
+      _ctrl.dispose();
+      _ctrl = PageController(viewportFraction: 0.52, initialPage: idx);
+      setState(() => _ready = true);
+    });
+  }
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _ctrl.dispose();
     super.dispose();
+  }
+
+  String _label(PetType p) => const {
+        PetType.dog1: 'Dog 1',
+        PetType.dog2: 'Dog 2',
+        PetType.cat1: 'Cat 1',
+        PetType.cat2: 'Cat 2',
+        PetType.rat1: 'Rat 1',
+        PetType.rat2: 'Rat 2',
+        PetType.bird1: 'Bird 1',
+        PetType.bird2: 'Bird 2',
+      }[p] ?? p.name;
+
+  String _species(PetType p) {
+    if (p == PetType.dog1 || p == PetType.dog2) return 'Canine';
+    if (p == PetType.cat1 || p == PetType.cat2) return 'Feline';
+    if (p == PetType.rat1 || p == PetType.rat2) return 'Rodent';
+    return 'Avian';
+  }
+
+  Color _speciesColor(PetType p) {
+    if (p == PetType.dog1 || p == PetType.dog2) return AppTheme.rust;
+    if (p == PetType.cat1 || p == PetType.cat2) return AppTheme.mustard;
+    if (p == PetType.rat1 || p == PetType.rat2) return AppTheme.clay;
+    return AppTheme.forest;
   }
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
+    final pad = AppTheme.hPad(context);
+    final w = MediaQuery.of(context).size.width;
 
-    return Consumer<AppSelectViewModel>(
-      builder: (context, vm, _) {
-        // Filter apps by search query
-        final filtered = _query.isEmpty
-            ? vm.installedApps
-            : vm.installedApps
-                .where((a) =>
-                    a.appName.toLowerCase().contains(_query.toLowerCase()) ||
-                    a.packageName.toLowerCase().contains(_query.toLowerCase()))
-                .toList();
+    return Consumer<PetSelectViewModel>(
+      builder: (context, vm, _) => Container(
+        color: AppTheme.bg,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: top + 16),
 
-        final monitoredCount = vm.monitoredApps.length;
+              // ── Header ──────────────────────────────────────────────────
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Choose Your',
+                              style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w500,
+                                color: AppTheme.grey5,
+                              )),
+                          const Text('Companion.',
+                              style: TextStyle(
+                                fontSize: 30, fontWeight: FontWeight.w900,
+                                color: AppTheme.black, letterSpacing: -1.2, height: 1.0,
+                              )),
+                        ],
+                      ),
+                    ),
+                    // Current species badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _speciesColor(vm.allPets[_idx]),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        _species(vm.allPets[_idx]).toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.w800,
+                          color: AppTheme.white, letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-        return Column(children: [
-          PixelTitleBar(topPadding: top, title: 'FOCUS PET'),
+              const SizedBox(height: 20),
 
-          // ── Sub-header with count badge ──
-          Container(
-            color: PixelTheme.bgDark,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(children: [
-              Text('●',
-                  style: PixelTheme.pixelFont(
-                      size: 9, color: PixelTheme.accent2)),
-              const SizedBox(width: 9),
-              Text('MONITORED APPS',
-                  style: PixelTheme.pixelFont(
-                      size: 8,
-                      weight: FontWeight.bold,
-                      color: PixelTheme.accent2)),
-              const Spacer(),
-              if (monitoredCount > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+              // ══════════════════════════════════════════════════════════
+              // BENTO ROW 1: Pet carousel tile (forest) — HORIZONTAL PRESERVED
+              // ══════════════════════════════════════════════════════════
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad),
+                child: Container(
                   decoration: BoxDecoration(
-                    color: PixelTheme.accent2,
-                    border: Border.all(color: Colors.black, width: 2),
-                    boxShadow: const [
-                      BoxShadow(
-                          color: Colors.black, offset: Offset(2, 2))
+                    color: AppTheme.forest,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    children: [
+                      // Label row
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            const Text('SELECT PET', style: AppTheme.tileLabel),
+                            const Spacer(),
+                            Text(
+                              _label(vm.allPets[_idx]),
+                              style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w800,
+                                color: AppTheme.onDark, letterSpacing: -0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── Horizontal carousel (preserved) ─────────────────
+                      if (_ready)
+                        SizedBox(
+                          height: (w * 0.52).clamp(170.0, 240.0),
+                          child: PageView.builder(
+                            controller: _ctrl,
+                            itemCount: vm.allPets.length,
+                            onPageChanged: (i) {
+                              setState(() => _idx = i);
+                              vm.selectPet(vm.allPets[i]);
+                            },
+                            itemBuilder: (ctx, i) {
+                              final pet = vm.allPets[i];
+                              final isSel = i == _idx;
+                              return AnimatedBuilder(
+                                animation: _ctrl,
+                                builder: (ctx, child) {
+                                  double scale = 1.0;
+                                  if (_ctrl.position.haveDimensions) {
+                                    final page = _ctrl.page ?? _idx.toDouble();
+                                    scale = (1.0 - (page - i).abs() * 0.22).clamp(0.78, 1.0);
+                                  } else {
+                                    scale = isSel ? 1.0 : 0.78;
+                                  }
+                                  return Transform.scale(scale: scale, child: child);
+                                },
+                                child: GestureDetector(
+                                  onTap: () => _ctrl.animateToPage(
+                                    i,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      decoration: BoxDecoration(
+                                        color: isSel
+                                            ? AppTheme.onDark.withOpacity(0.12)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: isSel
+                                              ? AppTheme.onDark.withOpacity(0.4)
+                                              : Colors.transparent,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          SizedBox(
+                                            width: 90, height: 90,
+                                            child: PetSpriteWidget(
+                                              petType: pet,
+                                              state: PetAnimState.idle,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            _label(pet),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w900,
+                                              color: isSel
+                                                  ? AppTheme.onDark
+                                                  : AppTheme.onDark.withOpacity(0.4),
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
+                                          Text(
+                                            _species(pet),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: AppTheme.onDark.withOpacity(0.45),
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      else
+                        SizedBox(height: (w * 0.52).clamp(170.0, 240.0)),
+
+                      const SizedBox(height: 14),
+
+                      // Dot indicators
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(vm.allPets.length, (i) {
+                          final active = i == _idx;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                            width: active ? 20 : 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? AppTheme.onDark
+                                  : AppTheme.onDark.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          );
+                        }),
+                      ),
                     ],
                   ),
-                  child: Text(
-                    '$monitoredCount SELECTED',
-                    style: PixelTheme.pixelFont(
-                        size: 6,
-                        color: PixelTheme.bg,
-                        weight: FontWeight.bold,
-                        shadows: []),
-                  ),
                 ),
-            ]),
-          ),
-
-          // ── Search bar ──
-          Container(
-            color: PixelTheme.bg,
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-            child: Container(
-              decoration: BoxDecoration(
-                color: PixelTheme.bgDark,
-                border: Border.all(color: PixelTheme.border, width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black, offset: Offset(3, 3))
-                ],
               ),
-              child: Row(children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: Text(
-                    '🔍',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _query = v),
-                    style: PixelTheme.pixelFont(
-                        size: 9,
-                        color: PixelTheme.textPrimary,
-                        shadows: []),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
-                      hintText: 'SEARCH APPS...',
-                      hintStyle: PixelTheme.pixelFont(
-                          size: 8,
-                          color: PixelTheme.textSec,
-                          shadows: []),
-                    ),
-                    cursorColor: PixelTheme.accent,
-                    cursorWidth: 2,
-                  ),
-                ),
-                if (_query.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      _searchCtrl.clear();
-                      setState(() => _query = '');
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Text(
-                        '✕',
-                        style: PixelTheme.pixelFont(
-                            size: 10,
-                            color: PixelTheme.textSec,
-                            shadows: []),
+
+              const SizedBox(height: 10),
+
+              // ══════════════════════════════════════════════════════════
+              // BENTO ROW 2: Behaviour controls — 3 tiles
+              // ══════════════════════════════════════════════════════════
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StepperTile(
+                        color: AppTheme.rust,
+                        label: 'APPEAR',
+                        value: vm.interruptDelayMinutes,
+                        unit: 'min',
+                        min: 1, max: 60, step: 1,
+                        onChanged: vm.setInterruptDelay,
                       ),
                     ),
-                  ),
-              ]),
-            ),
-          ),
-
-          // ── App list ──
-          Expanded(
-            child: vm.isLoading
-                ? _buildLoader()
-                : filtered.isEmpty
-                    ? _buildEmpty(_query.isNotEmpty)
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 110),
-                        itemCount: filtered.length,
-                        // Use a fixed item height for maximum scroll performance
-                        itemExtent: 66,
-                        itemBuilder: (context, i) =>
-                            _appRow(vm, filtered[i], i),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StepperTile(
+                        color: AppTheme.mustard,
+                        label: 'WALK',
+                        value: vm.walkDelaySeconds,
+                        unit: 'sec',
+                        min: 10, max: 600, step: 10,
+                        onChanged: vm.setWalkDelay,
                       ),
-          ),
-        ]);
-      },
-    );
-  }
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StepperTile(
+                        color: AppTheme.olive,
+                        label: 'REACT',
+                        value: vm.reactDelaySeconds,
+                        unit: 'sec',
+                        min: 10, max: 600, step: 10,
+                        onChanged: vm.setReactDelay,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-  Widget _buildLoader() {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        _PixelSpinner(),
-        const SizedBox(height: 16),
-        Text('LOADING APPS...',
-            style: PixelTheme.pixelFont(
-                size: 9, color: PixelTheme.accent)),
-      ]),
-    );
-  }
+              const SizedBox(height: 10),
 
-  Widget _buildEmpty(bool searching) {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(searching ? '✕' : '?',
-            style: PixelTheme.pixelFont(
-                size: 32, color: PixelTheme.textSec)),
-        const SizedBox(height: 12),
-        Text(
-          searching ? 'NO RESULTS FOR\n"${_query.toUpperCase()}"' : 'NO USER APPS FOUND',
-          style: PixelTheme.t9sec,
-          textAlign: TextAlign.center,
-        ),
-      ]),
-    );
-  }
+              // ══════════════════════════════════════════════════════════
+              // BENTO ROW 3: Walk zone tile (wide, cream)
+              // ══════════════════════════════════════════════════════════
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad),
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cream2,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('WALK ZONE', style: AppTheme.tileLabelDark),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.forest,
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Text(
+                              '${(vm.petZoneStart * 100).round()}%–${(vm.petZoneEnd * 100).round()}%',
+                              style: const TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.w700,
+                                color: AppTheme.onDark,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
-  Widget _appRow(AppSelectViewModel vm, dynamic app, int index) {
-    final monitored = vm.isAppMonitored(app.packageName);
+                      // Preset pills
+                      Wrap(
+                        spacing: 8, runSpacing: 8,
+                        children: _presets.map((p) {
+                          final label = p[0] as String;
+                          final ps = p[1] as double;
+                          final pe = p[2] as double;
+                          final active = (vm.petZoneStart - ps).abs() < 0.01 &&
+                              (vm.petZoneEnd - pe).abs() < 0.01;
+                          return GestureDetector(
+                            onTap: () => vm.setPetZone(ps, pe),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: active ? AppTheme.forest : AppTheme.bg,
+                                borderRadius: BorderRadius.circular(100),
+                                border: Border.all(
+                                  color: active
+                                      ? AppTheme.forest
+                                      : AppTheme.lineColor,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w700,
+                                  color: active ? AppTheme.onDark : AppTheme.grey5,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
 
-    // Cycle accent colors for variety in the list
-    const rowAccents = [
-      PixelTheme.accent,
-      PixelTheme.accent4,
-      PixelTheme.accent3,
-      PixelTheme.accent5,
-    ];
-    final accent = rowAccents[index % rowAccents.length];
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: GestureDetector(
-        onTap: () => vm.toggleApp(app.packageName),
-        child: Container(
-          height: 58,
-          decoration: BoxDecoration(
-            color: monitored ? const Color(0xFF101020) : PixelTheme.surface,
-            border: Border.all(
-              color: monitored ? accent : PixelTheme.border,
-              width: monitored ? 2 : 1.5,
-            ),
-            boxShadow: const [
-              BoxShadow(color: Colors.black, offset: Offset(3, 3))
+                      const SizedBox(height: 18),
+                      _WalkBar(vm: vm),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(children: [
-            // Icon box — letter initial
-            Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                color: monitored
-                    ? accent.withOpacity(0.15)
-                    : PixelTheme.bgDark,
-                border: Border.all(
-                  color: monitored ? accent : PixelTheme.border,
-                  width: 2,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  app.appName.isNotEmpty
-                      ? app.appName[0].toUpperCase()
-                      : '?',
-                  style: PixelTheme.pixelFont(
-                    size: 12,
-                    weight: FontWeight.bold,
-                    color: monitored ? accent : PixelTheme.textSec,
-                    shadows: [],
-                  ),
-                ),
-              ),
-            ),
-
-            // App info
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      app.appName.toUpperCase(),
-                      style: PixelTheme.pixelFont(
-                        size: 8,
-                        weight: FontWeight.bold,
-                        color: monitored
-                            ? PixelTheme.textPrimary
-                            : PixelTheme.textSec,
-                        shadows: [],
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (monitored) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        '▶ MONITORING',
-                        style: PixelTheme.pixelFont(
-                            size: 6, color: accent, shadows: []),
-                      ),
-                    ],
-                  ]),
-            ),
-
-            // Checkbox
-            PixelCheckbox(checked: monitored),
-          ]),
         ),
+      ),
+    );
+  }
+
+  static const _presets = [
+    ['Full', 0.00, 1.00],
+    ['Right ¾', 0.25, 1.00],
+    ['Half', 0.25, 0.75],
+    ['Left ¾', 0.00, 0.75],
+  ];
+}
+
+// ── Stepper bento tile ─────────────────────────────────────────────────────
+class _StepperTile extends StatelessWidget {
+  final Color color;
+  final String label;
+  final int value;
+  final String unit;
+  final int min, max, step;
+  final Function(int) onChanged;
+
+  const _StepperTile({
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.min,
+    required this.max,
+    required this.step,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppTheme.tileLabel),
+          const SizedBox(height: 10),
+          Text(
+            '$value',
+            style: const TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.w900,
+              color: AppTheme.white,
+              letterSpacing: -1.5,
+              height: 1.0,
+            ),
+          ),
+          Text(unit, style: const TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w600,
+            color: AppTheme.white, letterSpacing: 0.3,
+          )),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _Btn(
+                icon: Icons.remove,
+                enabled: value > min,
+                onTap: () => onChanged(value - step),
+              ),
+              const Spacer(),
+              _Btn(
+                icon: Icons.add,
+                enabled: value < max,
+                onTap: () => onChanged(value + step),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Simple pixel spinner ──────────────────────────────────────────────────
-class _PixelSpinner extends StatefulWidget {
+class _Btn extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _Btn({required this.icon, required this.enabled, required this.onTap});
+
   @override
-  State<_PixelSpinner> createState() => _PixelSpinnerState();
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: 30, height: 30,
+          decoration: BoxDecoration(
+            color: AppTheme.white.withOpacity(enabled ? 0.25 : 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14,
+              color: AppTheme.white.withOpacity(enabled ? 1.0 : 0.3)),
+        ),
+      );
 }
 
-class _PixelSpinnerState extends State<_PixelSpinner> {
-  int _frame = 0;
-  static const _frames = ['◤', '◥', '◢', '◣'];
+// ── Walk zone bar ──────────────────────────────────────────────────────────
+class _WalkBar extends StatefulWidget {
+  final PetSelectViewModel vm;
+  const _WalkBar({required this.vm});
+  @override
+  State<_WalkBar> createState() => _WalkBarState();
+}
+
+class _WalkBarState extends State<_WalkBar> {
+  late double _s, _e;
+  static const double _min = 0.10;
 
   @override
   void initState() {
     super.initState();
-    _tick();
-  }
-
-  void _tick() {
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) {
-        setState(() => _frame = (_frame + 1) % _frames.length);
-        _tick();
-      }
-    });
+    _s = widget.vm.petZoneStart;
+    _e = widget.vm.petZoneEnd;
   }
 
   @override
-  Widget build(BuildContext context) => Text(
-        _frames[_frame],
-        style: PixelTheme.pixelFont(size: 28, color: PixelTheme.accent),
+  void didUpdateWidget(_WalkBar old) {
+    super.didUpdateWidget(old);
+    if (old.vm.petZoneStart != widget.vm.petZoneStart ||
+        old.vm.petZoneEnd != widget.vm.petZoneEnd) {
+      _s = widget.vm.petZoneStart;
+      _e = widget.vm.petZoneEnd;
+    }
+  }
+
+  void _commit() => widget.vm.setPetZone(_s, _e);
+
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (_, c) => _bar(c.maxWidth));
+
+  Widget _bar(double W) {
+    const bH = 4.0;
+    const hS = 24.0;
+    return SizedBox(
+      height: hS,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            left: 0, right: 0,
+            child: Container(
+              height: bH,
+              decoration: BoxDecoration(
+                color: AppTheme.lineColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            left: _s * W,
+            width: (_e - _s) * W,
+            child: Container(
+              height: bH,
+              decoration: BoxDecoration(
+                color: AppTheme.forest,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            left: _s * W - hS / 2,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (d) =>
+                  setState(() => _s = (_s + d.delta.dx / W).clamp(0.0, _e - _min)),
+              onHorizontalDragEnd: (_) => _commit(),
+              child: _handle(),
+            ),
+          ),
+          Positioned(
+            left: _e * W - hS / 2,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (d) =>
+                  setState(() => _e = (_e + d.delta.dx / W).clamp(_s + _min, 1.0)),
+              onHorizontalDragEnd: (_) => _commit(),
+              child: _handle(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _handle() => Container(
+        width: 24, height: 24,
+        decoration: BoxDecoration(
+          color: AppTheme.forest,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppTheme.bg, width: 2.5),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.forest.withOpacity(0.3),
+              blurRadius: 8, offset: const Offset(0, 2),
+            ),
+          ],
+        ),
       );
 }

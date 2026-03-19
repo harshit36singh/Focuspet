@@ -48,15 +48,19 @@ class PlatformService {
     try { await _ch.invokeMethod('hidePet'); } catch (_) {}
   }
 
-  // ── App monitoring ────────────────────────────────────────────────────
+  // ── App monitoring — now fetches icons like BeatSocial ────────────────
   Future<List<InstalledApp>> getInstalledApps() async {
     try {
       final result = await _ch.invokeMethod<List>('getInstalledApps');
       if (result == null) return [];
-      return result.map((a) => InstalledApp(
-        packageName: a['packageName'] as String,
-        appName: a['appName'] as String,
-      )).toList();
+      return result.map((a) {
+        final map = Map<String, dynamic>.from(a as Map);
+        return InstalledApp(
+          packageName: map['packageName'] as String? ?? '',
+          appName: map['appName'] as String? ?? '',
+          iconBase64: map['icon'] as String?,
+        );
+      }).toList();
     } catch (_) { return []; }
   }
 
@@ -79,13 +83,13 @@ class PlatformService {
   }) async {
     try {
       await _ch.invokeMethod('updatePetSettings', {
-        'petType':          petType,
+        'petType':           petType,
         'interruptDelayMin': interruptDelayMin,
-        'walkDelaySec':     walkDelaySec,
-        'reactDelaySec':    reactDelaySec,
-        'alwaysActive':     alwaysActive,
-        'petZoneStart':     petZoneStart,
-        'petZoneEnd':       petZoneEnd,
+        'walkDelaySec':      walkDelaySec,
+        'reactDelaySec':     reactDelaySec,
+        'alwaysActive':      alwaysActive,
+        'petZoneStart':      petZoneStart,
+        'petZoneEnd':        petZoneEnd,
       });
     } catch (_) {}
   }
@@ -101,5 +105,11 @@ class PlatformService {
 class InstalledApp {
   final String packageName;
   final String appName;
-  InstalledApp({required this.packageName, required this.appName});
+  final String? iconBase64;
+
+  InstalledApp({
+    required this.packageName,
+    required this.appName,
+    this.iconBase64,
+  });
 }

@@ -3,20 +3,19 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'data/app_preferences.dart';
 import 'services/platform_service.dart';
-import 'ui/theme/pixel_theme.dart';
+import 'ui/theme/app_theme.dart';
 import 'ui/screens/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize app preferences
+
   final prefs = await AppPreferences.init();
-  
-  // Set system UI overlay style (transparent status bar)
+
+  // Transparent status bar so the greyish-white bg shows through
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark, // dark icons on light bg
     ),
   );
 
@@ -25,7 +24,6 @@ void main() async {
 
 class FocusPetApp extends StatelessWidget {
   final AppPreferences prefs;
-
   const FocusPetApp({Key? key, required this.prefs}) : super(key: key);
 
   @override
@@ -37,7 +35,7 @@ class FocusPetApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'Focus Pet',
-        theme: PixelTheme.theme,
+        theme: AppTheme.theme,
         debugShowCheckedModeBanner: false,
         home: const MainScreen(),
       ),

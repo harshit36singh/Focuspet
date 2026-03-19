@@ -5,14 +5,13 @@ import '../../services/platform_service.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/pet_select_viewmodel.dart';
 import '../../viewmodels/app_select_viewmodel.dart';
-import '../theme/pixel_theme.dart';
+import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'pet_select_screen.dart';
 import 'app_select_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
@@ -32,6 +31,7 @@ class _MainScreenState extends State<MainScreen> {
     _homeVM = HomeViewModel(prefs: prefs, platform: platform);
     _petVM = PetSelectViewModel(prefs: prefs, platform: platform);
     _appVM = AppSelectViewModel(prefs: prefs, platform: platform);
+    _homeVM.onPermissionsGranted = () => _appVM.prefetchApps();
   }
 
   @override
@@ -42,139 +42,108 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  // Tab colours — each tab has its own accent
-  static const _tabColors = [
-    PixelTheme.accent,   // HOME — gold
-    PixelTheme.accent4,  // PET  — cyan
-    PixelTheme.accent2,  // APPS — pink
-  ];
+  void _onTab(int i) {
+    setState(() => _idx = i);
+    if (i == 2) _appVM.ensureLoaded();
+  }
 
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      backgroundColor: PixelTheme.bg,
-      body: Stack(children: [
-        // ── Screens ──────────────────────────────────────────────────────
-        IndexedStack(
-          index: _idx,
-          children: [
-            ChangeNotifierProvider.value(
-              value: _homeVM,
-              child: RepaintBoundary(
-                child: TickerMode(
-                  enabled: _idx == 0,
-                  child: const HomeScreen(),
-                ),
-              ),
-            ),
-            ChangeNotifierProvider.value(
-              value: _petVM,
-              child: RepaintBoundary(
-                child: TickerMode(
-                  enabled: _idx == 1,
-                  child: const PetSelectScreen(),
-                ),
-              ),
-            ),
-            ChangeNotifierProvider.value(
-              value: _appVM,
-              child: RepaintBoundary(
-                child: TickerMode(
-                  enabled: _idx == 2,
-                  child: const AppSelectScreen(),
-                ),
-              ),
-            ),
-          ],
-        ),
-
-        // ── Floating Pixel Nav Bar ────────────────────────────────────────
-        Positioned(
-          left: 12,
-          right: 12,
-          bottom: bottomPad + 12,
-          child: _buildNav(),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildNav() {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: PixelTheme.navBg,
-        // Chunky pixel border — accent color of selected tab
-        border: Border.all(color: _tabColors[_idx], width: 2.5),
-        // Hard drop shadow = 90s game window depth
-        boxShadow: [
-          BoxShadow(
-              color: _tabColors[_idx].withOpacity(0.25),
-              offset: const Offset(0, 4),
-              blurRadius: 0),
-          const BoxShadow(
-              color: Colors.black, offset: Offset(4, 4), blurRadius: 0),
-        ],
-      ),
-      child: Row(children: [
-        _navItem(0, '▲', 'HOME'),
-        _navDivider(),
-        _navItem(1, '♦', 'PET'),
-        _navDivider(),
-        _navItem(2, '●', 'APPS'),
-      ]),
-    );
-  }
-
-  Widget _navDivider() => Container(
-        width: 2,
-        height: 64,
-        color: PixelTheme.border,
-      );
-
-  Widget _navItem(int index, String icon, String label) {
-    final active = _idx == index;
-    final color = _tabColors[index];
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _idx = index),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          color: active ? color.withOpacity(0.10) : Colors.transparent,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: AppTheme.bg,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _idx,
             children: [
-              // Icon — slightly larger when active
-              Text(
-                icon,
-                style: TextStyle(
-                  fontSize: active ? 20 : 16,
-                  color: active ? color : PixelTheme.textDim,
+              ChangeNotifierProvider.value(
+                value: _homeVM,
+                child: RepaintBoundary(
+                  child: TickerMode(enabled: _idx == 0, child: const HomeScreen()),
                 ),
               ),
-              const SizedBox(height: 4),
-              // Label
-              Text(
-                label,
-                style: PixelTheme.pixelFont(
-                  size: 7,
-                  weight: FontWeight.bold,
-                  color: active ? color : PixelTheme.textDim,
-                  shadows: [],
+              ChangeNotifierProvider.value(
+                value: _petVM,
+                child: RepaintBoundary(
+                  child: TickerMode(enabled: _idx == 1, child: const PetSelectScreen()),
                 ),
               ),
-              // Active underline bar
-              const SizedBox(height: 4),
-              Container(
-                height: 2,
-                width: 24,
-                color: active ? color : Colors.transparent,
+              ChangeNotifierProvider.value(
+                value: _appVM,
+                child: RepaintBoundary(
+                  child: TickerMode(enabled: _idx == 2, child: const AppSelectScreen()),
+                ),
               ),
             ],
           ),
+
+          // ── Floating bento navbar ─────────────────────────────────────
+          Positioned(
+            bottom: bottomPad + 18,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.black,
+                  borderRadius: BorderRadius.circular(100),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.black.withOpacity(0.40),
+                      blurRadius: 32,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _pill(0, Icons.home_rounded, Icons.home_outlined, 'Home', AppTheme.rust),
+                    const SizedBox(width: 3),
+                    _pill(1, Icons.pets, Icons.pets_outlined, 'Pet', AppTheme.mustard),
+                    const SizedBox(width: 3),
+                    _pill(2, Icons.apps_rounded, Icons.apps_outlined, 'Apps', AppTheme.sage),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(int i, IconData on, IconData off, String label, Color accent) {
+    final active = _idx == i;
+    return GestureDetector(
+      onTap: () => _onTab(i),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: active ? 20 : 15,
+          vertical: 12,
+        ),
+        decoration: BoxDecoration(
+          color: active ? accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(active ? on : off, size: 18,
+                color: active ? AppTheme.white : const Color(0xFF555555)),
+            if (active) ...[
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w800,
+                color: AppTheme.white, letterSpacing: -0.2,
+              )),
+            ],
+          ],
         ),
       ),
     );

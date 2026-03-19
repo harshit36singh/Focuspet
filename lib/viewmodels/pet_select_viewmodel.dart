@@ -10,20 +10,23 @@ class PetSelectViewModel extends ChangeNotifier {
   PetSelectViewModel({required this.prefs, required this.platform});
 
   // ── Getters ───────────────────────────────────────────────────────────
-  PetType get selectedPet           => prefs.selectedPet;
-  int     get interruptDelayMinutes => prefs.interruptDelayMinutes;
-  int     get walkDelaySeconds      => prefs.walkDelaySeconds;
-  int     get reactDelaySeconds     => prefs.reactDelaySeconds;
-  double  get petZoneStart          => prefs.petZoneStart;
-  double  get petZoneEnd            => prefs.petZoneEnd;
+  PetType  get selectedPet           => prefs.selectedPet;
+  int      get interruptDelayMinutes => prefs.interruptDelayMinutes;
+  int      get walkDelaySeconds      => prefs.walkDelaySeconds;
+  int      get reactDelaySeconds     => prefs.reactDelaySeconds;
+  double   get petZoneStart          => prefs.petZoneStart;
+  double   get petZoneEnd            => prefs.petZoneEnd;
 
   List<PetType> get allPets => PetType.values;
 
   // ── Actions ───────────────────────────────────────────────────────────
+
+  /// Immediately saves the pet and pushes settings to the running overlay
+  /// so the status bar pet updates without restarting the service.
   Future<void> selectPet(PetType pet) async {
     await prefs.setSelectedPet(pet);
-    await _syncNative();
-    notifyListeners();
+    notifyListeners(); // Update UI immediately
+    await _syncNative(); // Then push to native service
   }
 
   Future<void> setInterruptDelay(int minutes) async {
@@ -53,13 +56,13 @@ class PetSelectViewModel extends ChangeNotifier {
   // ── Private ───────────────────────────────────────────────────────────
   Future<void> _syncNative() async {
     await platform.updatePetSettings(
-      petType: prefs.selectedPet.name,
+      petType:           prefs.selectedPet.name,
       interruptDelayMin: prefs.interruptDelayMinutes,
-      walkDelaySec: prefs.walkDelaySeconds,
-      reactDelaySec: prefs.reactDelaySeconds,
-      alwaysActive: prefs.alwaysActive,
-      petZoneStart: prefs.petZoneStart,
-      petZoneEnd: prefs.petZoneEnd,
+      walkDelaySec:      prefs.walkDelaySeconds,
+      reactDelaySec:     prefs.reactDelaySeconds,
+      alwaysActive:      prefs.alwaysActive,
+      petZoneStart:      prefs.petZoneStart,
+      petZoneEnd:        prefs.petZoneEnd,
     );
   }
 }
