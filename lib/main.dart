@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:device_preview/device_preview.dart';
+import 'package:flutter/foundation.dart';
+
 import 'data/app_preferences.dart';
 import 'services/platform_service.dart';
 import 'ui/theme/app_theme.dart';
@@ -11,19 +14,25 @@ void main() async {
 
   final prefs = await AppPreferences.init();
 
-  // Transparent status bar so the greyish-white bg shows through
+  // Transparent status bar
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark, // dark icons on light bg
+      statusBarIconBrightness: Brightness.dark,
     ),
   );
 
-  runApp(FocusPetApp(prefs: prefs));
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode, // ✅ auto disable in release
+      builder: (context) => FocusPetApp(prefs: prefs),
+    ),
+  );
 }
 
 class FocusPetApp extends StatelessWidget {
   final AppPreferences prefs;
+
   const FocusPetApp({Key? key, required this.prefs}) : super(key: key);
 
   @override
@@ -37,6 +46,12 @@ class FocusPetApp extends StatelessWidget {
         title: 'Focus Pet',
         theme: AppTheme.theme,
         debugShowCheckedModeBanner: false,
+
+        // ✅ Device Preview integration
+        useInheritedMediaQuery: true,
+        locale: DevicePreview.locale(context),
+        builder: DevicePreview.appBuilder,
+
         home: const MainScreen(),
       ),
     );

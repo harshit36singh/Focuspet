@@ -1,34 +1,18 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../viewmodels/pet_select_viewmodel.dart';
-import '../../domain/pet_type.dart';
+import '../../viewmodels/app_select_viewmodel.dart';
 import '../theme/app_theme.dart';
-import '../widgets/pet_sprite_widget.dart';
 
-class PetSelectScreen extends StatefulWidget {
-  const PetSelectScreen({Key? key}) : super(key: key);
+class AppSelectScreen extends StatefulWidget {
+  const AppSelectScreen({Key? key}) : super(key: key);
   @override
-  State<PetSelectScreen> createState() => _PetSelectScreenState();
+  State<AppSelectScreen> createState() => _AppSelectScreenState();
 }
 
-class _PetSelectScreenState extends State<PetSelectScreen> {
-  late PageController _ctrl;
-  int _idx = 0;
-  bool _ready = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = PageController(viewportFraction: 0.52);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final vm = context.read<PetSelectViewModel>();
-      final idx = vm.allPets.indexOf(vm.selectedPet).clamp(0, vm.allPets.length - 1);
-      _idx = idx;
-      _ctrl.dispose();
-      _ctrl = PageController(viewportFraction: 0.52, initialPage: idx);
-      setState(() => _ready = true);
-    });
-  }
+class _AppSelectScreenState extends State<AppSelectScreen> {
+  final _ctrl = TextEditingController();
+  String _query = '';
 
   @override
   void dispose() {
@@ -36,235 +20,239 @@ class _PetSelectScreenState extends State<PetSelectScreen> {
     super.dispose();
   }
 
-  String _label(PetType p) => const {
-        PetType.dog1: 'Dog 1',
-        PetType.dog2: 'Dog 2',
-        PetType.cat1: 'Cat 1',
-        PetType.cat2: 'Cat 2',
-        PetType.rat1: 'Rat 1',
-        PetType.rat2: 'Rat 2',
-        PetType.bird1: 'Bird 1',
-        PetType.bird2: 'Bird 2',
-      }[p] ?? p.name;
+  // Opens a bento-styled dialog when an app row is tapped
+  void _showAppDialog(
+      BuildContext context, AppSelectViewModel vm, dynamic app) {
+    final monitored = vm.isAppMonitored(app.packageName);
+    final name = app.appName as String;
+    final pkg = app.packageName as String;
 
-  String _species(PetType p) {
-    if (p == PetType.dog1 || p == PetType.dog2) return 'Canine';
-    if (p == PetType.cat1 || p == PetType.cat2) return 'Feline';
-    if (p == PetType.rat1 || p == PetType.rat2) return 'Rodent';
-    return 'Avian';
-  }
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: AppTheme.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header tile
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppTheme.forest,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    _AppIcon(iconBase64: app.iconBase64, appName: name),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('APP', style: AppTheme.tileLabel),
+                          const SizedBox(height: 2),
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w900,
+                              color: AppTheme.onDark, letterSpacing: -0.5,
+                              height: 1.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-  Color _speciesColor(PetType p) {
-    if (p == PetType.dog1 || p == PetType.dog2) return AppTheme.rust;
-    if (p == PetType.cat1 || p == PetType.cat2) return AppTheme.mustard;
-    if (p == PetType.rat1 || p == PetType.rat2) return AppTheme.clay;
-    return AppTheme.forest;
+              const SizedBox(height: 14),
+
+              // Package tile
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.cream2,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('PACKAGE', style: AppTheme.tileLabelDark),
+                    const SizedBox(height: 4),
+                    Text(
+                      pkg,
+                      style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w500,
+                        color: AppTheme.grey5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Status tile
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: monitored
+                      ? AppTheme.forest.withOpacity(0.08)
+                      : AppTheme.cream2,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: monitored ? AppTheme.forest : AppTheme.lineColor,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      monitored
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: monitored ? AppTheme.forest : AppTheme.grey5,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      monitored ? 'Currently monitoring' : 'Not monitoring',
+                      style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700,
+                        color: monitored ? AppTheme.forest : AppTheme.grey5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Action button
+              GestureDetector(
+                onTap: () {
+                  vm.toggleApp(pkg);
+                  Navigator.of(context).pop();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: monitored ? AppTheme.rust : AppTheme.forest,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    monitored ? 'Remove from Monitoring' : 'Add to Monitoring',
+                    style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w800,
+                      color: AppTheme.white, letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: const Center(
+                  child: Text('Cancel',
+                      style: TextStyle(
+                        fontSize: 13, color: AppTheme.grey5,
+                        fontWeight: FontWeight.w500,
+                      )),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
     final pad = AppTheme.hPad(context);
-    final w = MediaQuery.of(context).size.width;
+    final isTablet = MediaQuery.of(context).size.width >= 700;
 
-    return Consumer<PetSelectViewModel>(
-      builder: (context, vm, _) => Container(
-        color: AppTheme.bg,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 120),
+    return Consumer<AppSelectViewModel>(
+      builder: (context, vm, _) {
+        final filtered = _query.isEmpty
+            ? vm.installedApps
+            : vm.installedApps
+                .where((a) =>
+                    a.appName.toLowerCase().contains(_query.toLowerCase()) ||
+                    a.packageName.toLowerCase().contains(_query.toLowerCase()))
+                .toList();
+        final count = vm.monitoredApps.length;
+
+        return Container(
+          color: AppTheme.bg,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: top + 16),
+              SizedBox(height: top + 12),
 
-              // ── Header ──────────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: pad),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Choose Your',
-                              style: TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w500,
-                                color: AppTheme.grey5,
-                              )),
-                          const Text('Companion.',
-                              style: TextStyle(
-                                fontSize: 30, fontWeight: FontWeight.w900,
-                                color: AppTheme.black, letterSpacing: -1.2, height: 1.0,
-                              )),
-                        ],
-                      ),
-                    ),
-                    // Current species badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _speciesColor(vm.allPets[_idx]),
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        _species(vm.allPets[_idx]).toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 10, fontWeight: FontWeight.w800,
-                          color: AppTheme.white, letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ══════════════════════════════════════════════════════════
-              // BENTO ROW 1: Pet carousel tile (forest) — HORIZONTAL PRESERVED
-              // ══════════════════════════════════════════════════════════
+              // ── FocusPet banner ────────────────────────────────────────
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: pad),
                 child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
                     color: AppTheme.forest,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(18),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Column(
+                  child: Row(
                     children: [
-                      // Label row
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      const Text('FOCUSPET',
+                          style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w900,
+                            color: AppTheme.onDark, letterSpacing: 3.0,
+                          )),
+                      const Spacer(),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: count > 0
+                              ? AppTheme.rust
+                              : AppTheme.onDark.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('SELECT PET', style: AppTheme.tileLabel),
-                            const Spacer(),
                             Text(
-                              _label(vm.allPets[_idx]),
+                              '$count',
                               style: const TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w800,
-                                color: AppTheme.onDark, letterSpacing: -0.3,
+                                fontSize: 12, fontWeight: FontWeight.w900,
+                                color: AppTheme.white,
                               ),
                             ),
+                            const SizedBox(width: 4),
+                            const Text('selected',
+                                style: TextStyle(
+                                  fontSize: 9, fontWeight: FontWeight.w600,
+                                  color: AppTheme.white, letterSpacing: 1.0,
+                                )),
                           ],
                         ),
                       ),
-
-                      const SizedBox(height: 16),
-
-                      // ── Horizontal carousel (preserved) ─────────────────
-                      if (_ready)
-                        SizedBox(
-                          height: (w * 0.52).clamp(170.0, 240.0),
-                          child: PageView.builder(
-                            controller: _ctrl,
-                            itemCount: vm.allPets.length,
-                            onPageChanged: (i) {
-                              setState(() => _idx = i);
-                              vm.selectPet(vm.allPets[i]);
-                            },
-                            itemBuilder: (ctx, i) {
-                              final pet = vm.allPets[i];
-                              final isSel = i == _idx;
-                              return AnimatedBuilder(
-                                animation: _ctrl,
-                                builder: (ctx, child) {
-                                  double scale = 1.0;
-                                  if (_ctrl.position.haveDimensions) {
-                                    final page = _ctrl.page ?? _idx.toDouble();
-                                    scale = (1.0 - (page - i).abs() * 0.22).clamp(0.78, 1.0);
-                                  } else {
-                                    scale = isSel ? 1.0 : 0.78;
-                                  }
-                                  return Transform.scale(scale: scale, child: child);
-                                },
-                                child: GestureDetector(
-                                  onTap: () => _ctrl.animateToPage(
-                                    i,
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      decoration: BoxDecoration(
-                                        color: isSel
-                                            ? AppTheme.onDark.withOpacity(0.12)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                          color: isSel
-                                              ? AppTheme.onDark.withOpacity(0.4)
-                                              : Colors.transparent,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          SizedBox(
-                                            width: 90, height: 90,
-                                            child: PetSpriteWidget(
-                                              petType: pet,
-                                              state: PetAnimState.idle,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            _label(pet),
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w900,
-                                              color: isSel
-                                                  ? AppTheme.onDark
-                                                  : AppTheme.onDark.withOpacity(0.4),
-                                              letterSpacing: -0.3,
-                                            ),
-                                          ),
-                                          Text(
-                                            _species(pet),
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: AppTheme.onDark.withOpacity(0.45),
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        )
-                      else
-                        SizedBox(height: (w * 0.52).clamp(170.0, 240.0)),
-
-                      const SizedBox(height: 14),
-
-                      // Dot indicators
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(vm.allPets.length, (i) {
-                          final active = i == _idx;
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                            width: active ? 20 : 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? AppTheme.onDark
-                                  : AppTheme.onDark.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          );
-                        }),
-                      ),
                     ],
                   ),
                 ),
@@ -272,335 +260,268 @@ class _PetSelectScreenState extends State<PetSelectScreen> {
 
               const SizedBox(height: 10),
 
-              // ══════════════════════════════════════════════════════════
-              // BENTO ROW 2: Behaviour controls — 3 tiles
-              // ══════════════════════════════════════════════════════════
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: pad),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StepperTile(
-                        color: AppTheme.rust,
-                        label: 'APPEAR',
-                        value: vm.interruptDelayMinutes,
-                        unit: 'min',
-                        min: 1, max: 60, step: 1,
-                        onChanged: vm.setInterruptDelay,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StepperTile(
-                        color: AppTheme.mustard,
-                        label: 'WALK',
-                        value: vm.walkDelaySeconds,
-                        unit: 'sec',
-                        min: 10, max: 600, step: 10,
-                        onChanged: vm.setWalkDelay,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StepperTile(
-                        color: AppTheme.olive,
-                        label: 'REACT',
-                        value: vm.reactDelaySeconds,
-                        unit: 'sec',
-                        min: 10, max: 600, step: 10,
-                        onChanged: vm.setReactDelay,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ══════════════════════════════════════════════════════════
-              // BENTO ROW 3: Walk zone tile (wide, cream)
-              // ══════════════════════════════════════════════════════════
+              // ── Search tile ────────────────────────────────────────────
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: pad),
                 child: Container(
-                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: AppTheme.cream2,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: AppTheme.lineColor, width: 1),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          const Text('WALK ZONE', style: AppTheme.tileLabelDark),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.forest,
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Text(
-                              '${(vm.petZoneStart * 100).round()}%–${(vm.petZoneEnd * 100).round()}%',
-                              style: const TextStyle(
-                                fontSize: 10, fontWeight: FontWeight.w700,
-                                color: AppTheme.onDark,
-                              ),
+                      Icon(Icons.search_rounded,
+                          size: 18, color: AppTheme.grey5),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _ctrl,
+                          onChanged: (v) => setState(() => _query = v),
+                          style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700,
+                            color: AppTheme.black, letterSpacing: -0.3,
+                          ),
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            hintText: 'Search apps...',
+                            hintStyle: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w500,
+                              color: AppTheme.grey5.withOpacity(0.6),
                             ),
                           ),
-                        ],
+                          cursorColor: AppTheme.forest,
+                        ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Preset pills
-                      Wrap(
-                        spacing: 8, runSpacing: 8,
-                        children: _presets.map((p) {
-                          final label = p[0] as String;
-                          final ps = p[1] as double;
-                          final pe = p[2] as double;
-                          final active = (vm.petZoneStart - ps).abs() < 0.01 &&
-                              (vm.petZoneEnd - pe).abs() < 0.01;
-                          return GestureDetector(
-                            onTap: () => vm.setPetZone(ps, pe),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: active ? AppTheme.forest : AppTheme.bg,
-                                borderRadius: BorderRadius.circular(100),
-                                border: Border.all(
-                                  color: active
-                                      ? AppTheme.forest
-                                      : AppTheme.lineColor,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Text(
-                                label,
-                                style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700,
-                                  color: active ? AppTheme.onDark : AppTheme.grey5,
-                                ),
-                              ),
+                      if (_query.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            _ctrl.clear();
+                            setState(() => _query = '');
+                          },
+                          child: Container(
+                            width: 24, height: 24,
+                            decoration: BoxDecoration(
+                              color: AppTheme.lineColor,
+                              shape: BoxShape.circle,
                             ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const SizedBox(height: 18),
-                      _WalkBar(vm: vm),
+                            child: Icon(Icons.close_rounded,
+                                size: 13, color: AppTheme.grey5),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
+
+              const SizedBox(height: 10),
+
+              // ── App list ───────────────────────────────────────────────
+              Expanded(
+                child: vm.isLoading
+                    ? _loader()
+                    : filtered.isEmpty
+                        ? _empty(_query.isNotEmpty)
+                        : isTablet
+                            ? _tabletGrid(vm, filtered, pad)
+                            : _phoneList(vm, filtered, pad),
+              ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  // Tablet: 2-column grid of app tiles
+  Widget _tabletGrid(
+      AppSelectViewModel vm, List<dynamic> apps, double pad) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: pad),
+      child: GridView.builder(
+        padding: const EdgeInsets.only(bottom: 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 3.5,
         ),
+        itemCount: apps.length,
+        itemBuilder: (ctx, i) => _row(vm, apps[i], i),
       ),
     );
   }
 
-  static const _presets = [
-    ['Full', 0.00, 1.00],
-    ['Right ¾', 0.25, 1.00],
-    ['Half', 0.25, 0.75],
-    ['Left ¾', 0.00, 0.75],
-  ];
-}
-
-// ── Stepper bento tile ─────────────────────────────────────────────────────
-class _StepperTile extends StatelessWidget {
-  final Color color;
-  final String label;
-  final int value;
-  final String unit;
-  final int min, max, step;
-  final Function(int) onChanged;
-
-  const _StepperTile({
-    required this.color,
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.min,
-    required this.max,
-    required this.step,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
+  // Phone: single list
+  Widget _phoneList(
+      AppSelectViewModel vm, List<dynamic> apps, double pad) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: pad),
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 120),
+        itemCount: apps.length,
+        itemBuilder: (ctx, i) => _row(vm, apps[i], i),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppTheme.tileLabel),
-          const SizedBox(height: 10),
-          Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w900,
-              color: AppTheme.white,
-              letterSpacing: -1.5,
-              height: 1.0,
+    );
+  }
+
+  Widget _loader() => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 20, height: 20,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppTheme.forest),
             ),
-          ),
-          Text(unit, style: const TextStyle(
-            fontSize: 10, fontWeight: FontWeight.w600,
-            color: AppTheme.white, letterSpacing: 0.3,
-          )),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _Btn(
-                icon: Icons.remove,
-                enabled: value > min,
-                onTap: () => onChanged(value - step),
-              ),
-              const Spacer(),
-              _Btn(
-                icon: Icons.add,
-                enabled: value < max,
-                onTap: () => onChanged(value + step),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Btn extends StatelessWidget {
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _Btn({required this.icon, required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: enabled ? onTap : null,
-        child: Container(
-          width: 30, height: 30,
-          decoration: BoxDecoration(
-            color: AppTheme.white.withOpacity(enabled ? 0.25 : 0.08),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 14,
-              color: AppTheme.white.withOpacity(enabled ? 1.0 : 0.3)),
+            SizedBox(height: 14),
+            Text('Loading apps...', style: AppTheme.metaLabel),
+          ],
         ),
       );
-}
 
-// ── Walk zone bar ──────────────────────────────────────────────────────────
-class _WalkBar extends StatefulWidget {
-  final PetSelectViewModel vm;
-  const _WalkBar({required this.vm});
-  @override
-  State<_WalkBar> createState() => _WalkBarState();
-}
-
-class _WalkBarState extends State<_WalkBar> {
-  late double _s, _e;
-  static const double _min = 0.10;
-
-  @override
-  void initState() {
-    super.initState();
-    _s = widget.vm.petZoneStart;
-    _e = widget.vm.petZoneEnd;
-  }
-
-  @override
-  void didUpdateWidget(_WalkBar old) {
-    super.didUpdateWidget(old);
-    if (old.vm.petZoneStart != widget.vm.petZoneStart ||
-        old.vm.petZoneEnd != widget.vm.petZoneEnd) {
-      _s = widget.vm.petZoneStart;
-      _e = widget.vm.petZoneEnd;
-    }
-  }
-
-  void _commit() => widget.vm.setPetZone(_s, _e);
-
-  @override
-  Widget build(BuildContext context) =>
-      LayoutBuilder(builder: (_, c) => _bar(c.maxWidth));
-
-  Widget _bar(double W) {
-    const bH = 4.0;
-    const hS = 24.0;
-    return SizedBox(
-      height: hS,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 0, right: 0,
-            child: Container(
-              height: bH,
+  Widget _empty(bool searching) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 64, height: 64,
               decoration: BoxDecoration(
-                color: AppTheme.lineColor,
-                borderRadius: BorderRadius.circular(2),
+                color: AppTheme.cream2,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.search_off_rounded,
+                  size: 28, color: AppTheme.grey5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              searching ? 'No Results.' : 'No Apps.',
+              style: const TextStyle(
+                fontSize: 26, fontWeight: FontWeight.w900,
+                color: AppTheme.black, letterSpacing: -1.0,
               ),
             ),
-          ),
-          Positioned(
-            left: _s * W,
-            width: (_e - _s) * W,
-            child: Container(
-              height: bH,
-              decoration: BoxDecoration(
-                color: AppTheme.forest,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Positioned(
-            left: _s * W - hS / 2,
-            child: GestureDetector(
-              onHorizontalDragUpdate: (d) =>
-                  setState(() => _s = (_s + d.delta.dx / W).clamp(0.0, _e - _min)),
-              onHorizontalDragEnd: (_) => _commit(),
-              child: _handle(),
-            ),
-          ),
-          Positioned(
-            left: _e * W - hS / 2,
-            child: GestureDetector(
-              onHorizontalDragUpdate: (d) =>
-                  setState(() => _e = (_e + d.delta.dx / W).clamp(_s + _min, 1.0)),
-              onHorizontalDragEnd: (_) => _commit(),
-              child: _handle(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _handle() => Container(
-        width: 24, height: 24,
-        decoration: BoxDecoration(
-          color: AppTheme.forest,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppTheme.bg, width: 2.5),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.forest.withOpacity(0.3),
-              blurRadius: 8, offset: const Offset(0, 2),
+            const SizedBox(height: 6),
+            Text(
+              searching ? 'Try a different term' : 'No launchable apps found',
+              style: AppTheme.metaLabel,
             ),
           ],
         ),
       );
+
+  Widget _row(AppSelectViewModel vm, dynamic app, int index) {
+    final monitored = vm.isAppMonitored(app.packageName);
+    final tileColors = [AppTheme.cream2, AppTheme.bg, AppTheme.mint];
+    final bgColor = monitored
+        ? AppTheme.forest.withOpacity(0.08)
+        : tileColors[index % tileColors.length];
+
+    return GestureDetector(
+      onTap: () => _showAppDialog(context, vm, app),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+          border: monitored
+              ? Border.all(color: AppTheme.forest, width: 1.5)
+              : Border.all(color: AppTheme.lineColor, width: 1),
+        ),
+        child: Row(
+          children: [
+            _AppIcon(iconBase64: app.iconBase64, appName: app.appName),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    app.appName,
+                    style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w700,
+                      color: AppTheme.black, letterSpacing: -0.2,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    monitored
+                        ? '● Monitoring'
+                        : app.packageName.split('.').last,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight:
+                          monitored ? FontWeight.w700 : FontWeight.w400,
+                      color: monitored ? AppTheme.forest : AppTheme.grey5,
+                      letterSpacing: monitored ? 0.3 : 0,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            // Tap hint arrow
+            Icon(Icons.chevron_right_rounded,
+                size: 18,
+                color: monitored
+                    ? AppTheme.forest
+                    : AppTheme.grey5.withOpacity(0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppIcon extends StatelessWidget {
+  final String? iconBase64;
+  final String appName;
+  const _AppIcon({required this.iconBase64, required this.appName});
+
+  @override
+  Widget build(BuildContext context) {
+    if (iconBase64 != null && iconBase64!.isNotEmpty) {
+      try {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.memory(
+            base64Decode(iconBase64!),
+            width: 40, height: 40,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _letter(),
+          ),
+        );
+      } catch (_) {}
+    }
+    return _letter();
+  }
+
+  Widget _letter() {
+    final colors = [
+      AppTheme.rust, AppTheme.mustard, AppTheme.forest,
+      AppTheme.clay, AppTheme.olive, AppTheme.sage,
+    ];
+    final color = colors[appName.isNotEmpty
+        ? appName.codeUnitAt(0) % colors.length
+        : 0];
+    return Container(
+      width: 40, height: 40,
+      decoration: BoxDecoration(
+        color: color, borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        appName.isNotEmpty ? appName[0].toUpperCase() : '?',
+        style: const TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.white,
+        ),
+      ),
+    );
+  }
 }

@@ -47,8 +47,75 @@ class _MainScreenState extends State<MainScreen> {
     if (i == 2) _appVM.ensureLoaded();
   }
 
+  bool get _isTablet => MediaQuery.of(context).size.width >= 700;
+
   @override
   Widget build(BuildContext context) {
+    return _isTablet ? _buildTablet() : _buildPhone();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // TABLET: side-by-side 3-panel bento layout (all screens visible)
+  // ══════════════════════════════════════════════════════════════════════
+  Widget _buildTablet() {
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      body: Row(
+        children: [
+          // Panel 1: Home
+          Expanded(
+            flex: 3,
+            child: ClipRect(
+              child: ChangeNotifierProvider.value(
+                value: _homeVM,
+                child: const HomeScreen(),
+              ),
+            ),
+          ),
+          // Divider
+          Container(width: 1, color: AppTheme.lineColor),
+          // Panel 2: Pet select
+          Expanded(
+            flex: 3,
+            child: ClipRect(
+              child: ChangeNotifierProvider.value(
+                value: _petVM,
+                child: const PetSelectScreen(),
+              ),
+            ),
+          ),
+          // Divider
+          Container(width: 1, color: AppTheme.lineColor),
+          // Panel 3: App select
+          Expanded(
+            flex: 3,
+            child: ClipRect(
+              child: ChangeNotifierProvider.value(
+                value: _appVM,
+                child: TickerMode(
+                  enabled: true,
+                  child: Builder(
+                    builder: (ctx) {
+                      // Ensure apps load when tablet layout is shown
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _appVM.ensureLoaded();
+                      });
+                      return const AppSelectScreen();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PHONE: indexed stack with floating bento navbar
+  // ══════════════════════════════════════════════════════════════════════
+  Widget _buildPhone() {
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -61,29 +128,31 @@ class _MainScreenState extends State<MainScreen> {
               ChangeNotifierProvider.value(
                 value: _homeVM,
                 child: RepaintBoundary(
-                  child: TickerMode(enabled: _idx == 0, child: const HomeScreen()),
+                  child: TickerMode(
+                      enabled: _idx == 0, child: const HomeScreen()),
                 ),
               ),
               ChangeNotifierProvider.value(
                 value: _petVM,
                 child: RepaintBoundary(
-                  child: TickerMode(enabled: _idx == 1, child: const PetSelectScreen()),
+                  child: TickerMode(
+                      enabled: _idx == 1, child: const PetSelectScreen()),
                 ),
               ),
               ChangeNotifierProvider.value(
                 value: _appVM,
                 child: RepaintBoundary(
-                  child: TickerMode(enabled: _idx == 2, child: const AppSelectScreen()),
+                  child: TickerMode(
+                      enabled: _idx == 2, child: const AppSelectScreen()),
                 ),
               ),
             ],
           ),
 
-          // ── Floating bento navbar ─────────────────────────────────────
+          // ── Floating bento navbar ──────────────────────────────────────
           Positioned(
             bottom: bottomPad + 18,
-            left: 0,
-            right: 0,
+            left: 0, right: 0,
             child: Center(
               child: Container(
                 decoration: BoxDecoration(
@@ -92,8 +161,7 @@ class _MainScreenState extends State<MainScreen> {
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.black.withOpacity(0.40),
-                      blurRadius: 32,
-                      offset: const Offset(0, 12),
+                      blurRadius: 32, offset: const Offset(0, 12),
                     ),
                   ],
                 ),
@@ -101,11 +169,14 @@ class _MainScreenState extends State<MainScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _pill(0, Icons.home_rounded, Icons.home_outlined, 'Home', AppTheme.rust),
+                    _pill(0, Icons.home_rounded, Icons.home_outlined,
+                        'Home', AppTheme.rust),
                     const SizedBox(width: 3),
-                    _pill(1, Icons.pets, Icons.pets_outlined, 'Pet', AppTheme.mustard),
+                    _pill(1, Icons.pets, Icons.pets_outlined,
+                        'Pet', AppTheme.mustard),
                     const SizedBox(width: 3),
-                    _pill(2, Icons.apps_rounded, Icons.apps_outlined, 'Apps', AppTheme.sage),
+                    _pill(2, Icons.apps_rounded, Icons.apps_outlined,
+                        'Apps', AppTheme.sage),
                   ],
                 ),
               ),
@@ -116,7 +187,8 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _pill(int i, IconData on, IconData off, String label, Color accent) {
+  Widget _pill(
+      int i, IconData on, IconData off, String label, Color accent) {
     final active = _idx == i;
     return GestureDetector(
       onTap: () => _onTab(i),
@@ -124,9 +196,7 @@ class _MainScreenState extends State<MainScreen> {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeInOut,
         padding: EdgeInsets.symmetric(
-          horizontal: active ? 20 : 15,
-          vertical: 12,
-        ),
+            horizontal: active ? 20 : 15, vertical: 12),
         decoration: BoxDecoration(
           color: active ? accent : Colors.transparent,
           borderRadius: BorderRadius.circular(100),

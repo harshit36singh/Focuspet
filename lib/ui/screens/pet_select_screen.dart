@@ -1,18 +1,39 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../viewmodels/app_select_viewmodel.dart';
+import '../../viewmodels/pet_select_viewmodel.dart';
+import '../../domain/pet_type.dart';
 import '../theme/app_theme.dart';
+import '../widgets/pet_sprite_widget.dart';
 
-class AppSelectScreen extends StatefulWidget {
-  const AppSelectScreen({Key? key}) : super(key: key);
+class PetSelectScreen extends StatefulWidget {
+  const PetSelectScreen({Key? key}) : super(key: key);
   @override
-  State<AppSelectScreen> createState() => _AppSelectScreenState();
+  State<PetSelectScreen> createState() => _PetSelectScreenState();
 }
 
-class _AppSelectScreenState extends State<AppSelectScreen> {
-  final _ctrl = TextEditingController();
-  String _query = '';
+class _PetSelectScreenState extends State<PetSelectScreen> {
+  late PageController _ctrl;
+  int _idx = 0;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = PageController(viewportFraction: 0.52);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final vm = context.read<PetSelectViewModel>();
+      final idx = vm.allPets.indexOf(vm.selectedPet).clamp(0, vm.allPets.length - 1);
+      if (!mounted) return;
+      final old = _ctrl;
+      _ctrl = PageController(viewportFraction: 0.52, initialPage: idx);
+      old.dispose();
+      setState(() {
+        _idx = idx;
+        _ready = true;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -20,144 +41,76 @@ class _AppSelectScreenState extends State<AppSelectScreen> {
     super.dispose();
   }
 
+  String _label(PetType p) => const {
+        PetType.dog1: 'Dog 1', PetType.dog2: 'Dog 2',
+        PetType.cat1: 'Cat 1', PetType.cat2: 'Cat 2',
+        PetType.rat1: 'Rat 1', PetType.rat2: 'Rat 2',
+        PetType.bird1: 'Bird 1', PetType.bird2: 'Bird 2',
+      }[p] ?? p.name;
+
+  String _species(PetType p) {
+    if (p == PetType.dog1 || p == PetType.dog2) return 'Canine';
+    if (p == PetType.cat1 || p == PetType.cat2) return 'Feline';
+    if (p == PetType.rat1 || p == PetType.rat2) return 'Rodent';
+    return 'Avian';
+  }
+
+  Color _speciesColor(PetType p) {
+    if (p == PetType.dog1 || p == PetType.dog2) return AppTheme.rust;
+    if (p == PetType.cat1 || p == PetType.cat2) return AppTheme.mustard;
+    if (p == PetType.rat1 || p == PetType.rat2) return AppTheme.clay;
+    return AppTheme.forest;
+  }
+
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
     final pad = AppTheme.hPad(context);
+    final isTablet = MediaQuery.of(context).size.width >= 700;
 
-    return Consumer<AppSelectViewModel>(
-      builder: (context, vm, _) {
-        final filtered = _query.isEmpty
-            ? vm.installedApps
-            : vm.installedApps.where((a) =>
-                a.appName.toLowerCase().contains(_query.toLowerCase()) ||
-                a.packageName.toLowerCase().contains(_query.toLowerCase())).toList();
-        final count = vm.monitoredApps.length;
-
-        return Container(
-          color: AppTheme.bg,
+    return Consumer<PetSelectViewModel>(
+      builder: (context, vm, _) => Container(
+        color: AppTheme.bg,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: isTablet ? 24 : 120),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: top + 16),
+              SizedBox(height: top + 12),
 
-              // ── Header ─────────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: pad),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('Monitor Your',
-                              style: TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w500,
-                                color: AppTheme.grey5,
-                              )),
-                          Text('Apps.',
-                              style: TextStyle(
-                                fontSize: 30, fontWeight: FontWeight.w900,
-                                color: AppTheme.black,
-                                letterSpacing: -1.2, height: 1.0,
-                              )),
-                        ],
-                      ),
-                    ),
-                    // Count bento badge
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: count > 0 ? AppTheme.rust : AppTheme.cream2,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '$count',
-                            style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w900,
-                              color: count > 0 ? AppTheme.white : AppTheme.grey5,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'selected',
-                            style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.w600,
-                              color: count > 0
-                                  ? AppTheme.white.withOpacity(0.8)
-                                  : AppTheme.grey5,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── Bento search tile ────────────────────────────────────────
+              // ── FocusPet banner ───────────────────────────────────────
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: pad),
                 child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
                     color: AppTheme.forest,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
                   child: Row(
                     children: [
-                      const Icon(Icons.search_rounded,
-                          size: 18, color: AppTheme.onDark),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _ctrl,
-                          onChanged: (v) => setState(() => _query = v),
+                      const Text('FOCUSPET',
+                          style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w900,
+                            color: AppTheme.onDark, letterSpacing: 3.0,
+                          )),
+                      const Spacer(),
+                      // Species badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _speciesColor(vm.allPets[_idx]),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          _species(vm.allPets[_idx]).toUpperCase(),
                           style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700,
-                            color: AppTheme.onDark, letterSpacing: -0.3,
+                            fontSize: 9, fontWeight: FontWeight.w800,
+                            color: AppTheme.white, letterSpacing: 1.5,
                           ),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                            hintText: 'Search apps...',
-                            hintStyle: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w500,
-                              color: AppTheme.onDark.withOpacity(0.4),
-                            ),
-                          ),
-                          cursorColor: AppTheme.onDark,
                         ),
                       ),
-                      if (_query.isNotEmpty)
-                        GestureDetector(
-                          onTap: () {
-                            _ctrl.clear();
-                            setState(() => _query = '');
-                          },
-                          child: Container(
-                            width: 24, height: 24,
-                            decoration: BoxDecoration(
-                              color: AppTheme.onDark.withOpacity(0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.close_rounded,
-                                size: 13,
-                                color: AppTheme.onDark.withOpacity(0.8)),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -165,195 +118,522 @@ class _AppSelectScreenState extends State<AppSelectScreen> {
 
               const SizedBox(height: 10),
 
-              // ── App list ─────────────────────────────────────────────────
-              Expanded(
-                child: vm.isLoading
-                    ? _loader()
-                    : filtered.isEmpty
-                        ? _empty(_query.isNotEmpty)
-                        : Padding(
-                            padding: EdgeInsets.symmetric(horizontal: pad),
-                            child: ListView.builder(
-                              padding: const EdgeInsets.only(bottom: 120),
-                              itemCount: filtered.length,
-                              itemBuilder: (ctx, i) => _row(vm, filtered[i], i),
-                            ),
-                          ),
-              ),
+              if (isTablet)
+                _buildTabletLayout(vm, pad)
+              else
+                _buildPhoneLayout(vm, pad),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _loader() => const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 20, height: 20,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppTheme.forest),
-            ),
-            SizedBox(height: 14),
-            Text('Loading apps...', style: AppTheme.metaLabel),
-          ],
-        ),
-      );
-
-  Widget _empty(bool searching) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                color: AppTheme.cream2,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(Icons.search_off_rounded,
-                  size: 28, color: AppTheme.grey5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              searching ? 'No Results.' : 'No Apps.',
-              style: const TextStyle(
-                fontSize: 26, fontWeight: FontWeight.w900,
-                color: AppTheme.black, letterSpacing: -1.0,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              searching ? 'Try a different term' : 'No launchable apps found',
-              style: AppTheme.metaLabel,
-            ),
-          ],
-        ),
-      );
-
-  Widget _row(AppSelectViewModel vm, dynamic app, int index) {
-    final monitored = vm.isAppMonitored(app.packageName);
-    // Alternating tile colors for bento feel
-    final tileColors = [AppTheme.cream2, AppTheme.bg, AppTheme.mint];
-    final bgColor = monitored
-        ? AppTheme.forest.withOpacity(0.08)
-        : tileColors[index % tileColors.length];
-
-    return GestureDetector(
-      onTap: () => vm.toggleApp(app.packageName),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-          border: monitored
-              ? Border.all(color: AppTheme.forest, width: 1.5)
-              : Border.all(color: AppTheme.lineColor, width: 1),
-        ),
-        child: Row(
-          children: [
-            // App icon
-            _AppIcon(iconBase64: app.iconBase64, appName: app.appName),
-            const SizedBox(width: 12),
-
-            // Name + status
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    app.appName,
-                    style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700,
-                      color: AppTheme.black, letterSpacing: -0.2,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+  // ══════════════════════════════════════════════════════════════════════
+  // TABLET: all bento on one page, side by side
+  // ══════════════════════════════════════════════════════════════════════
+  Widget _buildTabletLayout(PetSelectViewModel vm, double pad) {
+    final w = MediaQuery.of(context).size.width;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: pad),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left: Carousel tile (takes more space)
+          Expanded(
+            flex: 3,
+            child: _carouselTile(vm, w),
+          ),
+          const SizedBox(width: 10),
+          // Right: steppers + walk zone stacked
+          Expanded(
+            flex: 2,
+            child: Column(
+              children: [
+                  // 3 steppers row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StepperTile(
+                          color: AppTheme.rust, label: 'APPEAR',
+                          value: vm.interruptDelayMinutes, unit: 'min',
+                          min: 1, max: 60, step: 1,
+                          onChanged: vm.setInterruptDelay,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StepperTile(
+                          color: AppTheme.mustard, label: 'WALK',
+                          value: vm.walkDelaySeconds, unit: 'sec',
+                          min: 10, max: 600, step: 10,
+                          onChanged: vm.setWalkDelay,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StepperTile(
+                          color: AppTheme.olive, label: 'REACT',
+                          value: vm.reactDelaySeconds, unit: 'sec',
+                          min: 10, max: 600, step: 10,
+                          onChanged: vm.setReactDelay,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    monitored ? '● Monitoring' : app.packageName.split('.').last,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: monitored ? FontWeight.w700 : FontWeight.w400,
-                      color: monitored ? AppTheme.forest : AppTheme.grey5,
-                      letterSpacing: monitored ? 0.3 : 0,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  const SizedBox(height: 10),
+                  // Walk zone tile
+                  _walkZoneTile(vm),
                 ],
               ),
             ),
+          ],
+        ),
+      );
+  }
 
-            // Bento-style checkbox
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 28, height: 28,
-              decoration: BoxDecoration(
-                color: monitored ? AppTheme.forest : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: monitored ? AppTheme.forest : AppTheme.grey5,
-                  width: 1.5,
+  // ══════════════════════════════════════════════════════════════════════
+  // PHONE: vertical stack, fills page
+  // ══════════════════════════════════════════════════════════════════════
+  Widget _buildPhoneLayout(PetSelectViewModel vm, double pad) {
+    final w = MediaQuery.of(context).size.width;
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: pad),
+          child: _carouselTile(vm, w),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: pad),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StepperTile(
+                  color: AppTheme.rust, label: 'APPEAR',
+                  value: vm.interruptDelayMinutes, unit: 'min',
+                  min: 1, max: 60, step: 1,
+                  onChanged: vm.setInterruptDelay,
                 ),
               ),
-              child: monitored
-                  ? const Icon(Icons.check_rounded,
-                      size: 16, color: AppTheme.onDark)
-                  : null,
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StepperTile(
+                  color: AppTheme.mustard, label: 'WALK',
+                  value: vm.walkDelaySeconds, unit: 'sec',
+                  min: 10, max: 600, step: 10,
+                  onChanged: vm.setWalkDelay,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StepperTile(
+                  color: AppTheme.olive, label: 'REACT',
+                  value: vm.reactDelaySeconds, unit: 'sec',
+                  min: 10, max: 600, step: 10,
+                  onChanged: vm.setReactDelay,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: pad),
+          child: _walkZoneTile(vm),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+
+  Widget _carouselTile(PetSelectViewModel vm, double w) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.forest,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Text('SELECT PET', style: AppTheme.tileLabel),
+                const Spacer(),
+                Text(
+                  _label(vm.allPets[_idx]),
+                  style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w800,
+                    color: AppTheme.onDark, letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_ready)
+            SizedBox(
+              height: (w * 0.52).clamp(170.0, 240.0),
+              child: PageView.builder(
+                controller: _ctrl,
+                itemCount: vm.allPets.length,
+                onPageChanged: (i) {
+                  setState(() => _idx = i);
+                  vm.selectPet(vm.allPets[i]);
+                },
+                itemBuilder: (ctx, i) {
+                  final pet = vm.allPets[i];
+                  final isSel = i == _idx;
+                  return AnimatedBuilder(
+                    animation: _ctrl,
+                    builder: (ctx, child) {
+                      double scale = 1.0;
+                      if (_ctrl.position.haveDimensions) {
+                        final page = _ctrl.page ?? _idx.toDouble();
+                        scale = (1.0 - (page - i).abs() * 0.22).clamp(0.78, 1.0);
+                      } else {
+                        scale = isSel ? 1.0 : 0.78;
+                      }
+                      return Transform.scale(scale: scale, child: child);
+                    },
+                    child: GestureDetector(
+                      onTap: () => _ctrl.animateToPage(i,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            color: isSel
+                                ? AppTheme.onDark.withOpacity(0.12)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isSel
+                                  ? AppTheme.onDark.withOpacity(0.4)
+                                  : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 90, height: 90,
+                                child: PetSpriteWidget(
+                                  petType: pet, state: PetAnimState.idle,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _label(pet),
+                                style: TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w900,
+                                  color: isSel
+                                      ? AppTheme.onDark
+                                      : AppTheme.onDark.withOpacity(0.4),
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              Text(
+                                _species(pet),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppTheme.onDark.withOpacity(0.45),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            SizedBox(height: (w * 0.52).clamp(170.0, 240.0)),
+
+          const SizedBox(height: 14),
+          // Dot indicators
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(vm.allPets.length, (i) {
+              final active = i == _idx;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                width: active ? 20 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppTheme.onDark
+                      : AppTheme.onDark.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _walkZoneTile(PetSelectViewModel vm) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppTheme.cream2,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('WALK ZONE', style: AppTheme.tileLabelDark),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.forest,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    '${(vm.petZoneStart * 100).round()}%–${(vm.petZoneEnd * 100).round()}%',
+                    style: const TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w700,
+                      color: AppTheme.onDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: _presets.map((p) {
+                final label = p[0] as String;
+                final ps = p[1] as double;
+                final pe = p[2] as double;
+                final active = (vm.petZoneStart - ps).abs() < 0.01 &&
+                    (vm.petZoneEnd - pe).abs() < 0.01;
+                return GestureDetector(
+                  onTap: () => vm.setPetZone(ps, pe),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: active ? AppTheme.forest : AppTheme.bg,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: active ? AppTheme.forest : AppTheme.lineColor,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700,
+                        color: active ? AppTheme.onDark : AppTheme.grey5,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 18),
+            _WalkBar(vm: vm),
+          ],
+        ),
+      );
+
+  static const _presets = [
+    ['Full', 0.00, 1.00],
+    ['Right ¾', 0.25, 1.00],
+    ['Half', 0.25, 0.75],
+    ['Left ¾', 0.00, 0.75],
+  ];
+}
+
+// ── Stepper bento tile ─────────────────────────────────────────────────────
+class _StepperTile extends StatelessWidget {
+  final Color color;
+  final String label;
+  final int value;
+  final String unit;
+  final int min, max, step;
+  final Function(int) onChanged;
+
+  const _StepperTile({
+    required this.color, required this.label,
+    required this.value, required this.unit,
+    required this.min, required this.max, required this.step,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color, borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AppTheme.tileLabel),
+            const SizedBox(height: 10),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text('$value',
+                  style: const TextStyle(
+                    fontSize: 36, fontWeight: FontWeight.w900,
+                    color: AppTheme.white, letterSpacing: -1.5, height: 1.0,
+                  )),
+            ),
+            Text(unit, style: const TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w600,
+              color: AppTheme.white, letterSpacing: 0.3,
+            )),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _Btn(icon: Icons.remove, enabled: value > min,
+                    onTap: () => onChanged(value - step)),
+                _Btn(icon: Icons.add, enabled: value < max,
+                    onTap: () => onChanged(value + step)),
+              ],
             ),
           ],
         ),
-      ),
-    );
-  }
+      );
 }
 
-class _AppIcon extends StatelessWidget {
-  final String? iconBase64;
-  final String appName;
-  const _AppIcon({required this.iconBase64, required this.appName});
+class _Btn extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _Btn({required this.icon, required this.enabled, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    if (iconBase64 != null && iconBase64!.isNotEmpty) {
-      try {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.memory(
-            base64Decode(iconBase64!),
-            width: 40, height: 40,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _letter(),
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: 30, height: 30,
+          decoration: BoxDecoration(
+            color: AppTheme.white.withOpacity(enabled ? 0.25 : 0.08),
+            borderRadius: BorderRadius.circular(8),
           ),
-        );
-      } catch (_) {}
-    }
-    return _letter();
+          child: Icon(icon, size: 14,
+              color: AppTheme.white.withOpacity(enabled ? 1.0 : 0.3)),
+        ),
+      );
+}
+
+// ── Walk zone bar ──────────────────────────────────────────────────────────
+class _WalkBar extends StatefulWidget {
+  final PetSelectViewModel vm;
+  const _WalkBar({required this.vm});
+  @override
+  State<_WalkBar> createState() => _WalkBarState();
+}
+
+class _WalkBarState extends State<_WalkBar> {
+  late double _s, _e;
+  static const double _min = 0.10;
+
+  @override
+  void initState() {
+    super.initState();
+    _s = widget.vm.petZoneStart;
+    _e = widget.vm.petZoneEnd;
   }
 
-  Widget _letter() {
-    // Cycle through bento colors for letter avatars
-    final colors = [AppTheme.rust, AppTheme.mustard, AppTheme.forest,
-                    AppTheme.clay, AppTheme.olive, AppTheme.sage];
-    final color = colors[appName.isNotEmpty
-        ? appName.codeUnitAt(0) % colors.length
-        : 0];
+  @override
+  void didUpdateWidget(_WalkBar old) {
+    super.didUpdateWidget(old);
+    if (old.vm.petZoneStart != widget.vm.petZoneStart ||
+        old.vm.petZoneEnd != widget.vm.petZoneEnd) {
+      _s = widget.vm.petZoneStart;
+      _e = widget.vm.petZoneEnd;
+    }
+  }
 
-    return Container(
-      width: 40, height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        appName.isNotEmpty ? appName[0].toUpperCase() : '?',
-        style: const TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w900,
-          color: AppTheme.white,
-        ),
+  void _commit() => widget.vm.setPetZone(_s, _e);
+
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (_, c) => _bar(c.maxWidth));
+
+  Widget _bar(double W) {
+    const bH = 4.0;
+    const hS = 24.0;
+    return SizedBox(
+      height: hS,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            left: 0, right: 0,
+            child: Container(
+              height: bH,
+              decoration: BoxDecoration(
+                color: AppTheme.lineColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            left: _s * W,
+            width: (_e - _s) * W,
+            child: Container(
+              height: bH,
+              decoration: BoxDecoration(
+                color: AppTheme.forest,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            left: _s * W - hS / 2,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (d) =>
+                  setState(() => _s = (_s + d.delta.dx / W).clamp(0.0, _e - _min)),
+              onHorizontalDragEnd: (_) => _commit(),
+              child: _handle(),
+            ),
+          ),
+          Positioned(
+            left: _e * W - hS / 2,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (d) =>
+                  setState(() => _e = (_e + d.delta.dx / W).clamp(_s + _min, 1.0)),
+              onHorizontalDragEnd: (_) => _commit(),
+              child: _handle(),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  Widget _handle() => Container(
+        width: 24, height: 24,
+        decoration: BoxDecoration(
+          color: AppTheme.forest, shape: BoxShape.circle,
+          border: Border.all(color: AppTheme.bg, width: 2.5),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.forest.withOpacity(0.3),
+              blurRadius: 8, offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+      );
 }
