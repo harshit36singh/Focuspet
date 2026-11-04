@@ -1,526 +1,344 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/platform_service.dart';
 import '../../viewmodels/app_select_viewmodel.dart';
 import '../theme/app_theme.dart';
+import '../widgets/sticker.dart';
+
+final Map<String, Uint8List?> _iconCache = {};
+
+Uint8List? _iconBytes(InstalledApp a) {
+  final b = a.iconBase64;
+  if (b == null || b.isEmpty) return null;
+  return _iconCache.putIfAbsent(a.packageName, () {
+    try {
+      return base64Decode(b);
+    } catch (_) {
+      return null;
+    }
+  });
+}
 
 class AppSelectScreen extends StatefulWidget {
-  const AppSelectScreen({Key? key}) : super(key: key);
+  const AppSelectScreen({super.key});
   @override
   State<AppSelectScreen> createState() => _AppSelectScreenState();
 }
 
 class _AppSelectScreenState extends State<AppSelectScreen> {
-  final _ctrl = TextEditingController();
-  String _query = '';
+  final _search = TextEditingController();
+  String _q = '';
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _search.dispose();
     super.dispose();
-  }
-
-  // Opens a bento-styled dialog when an app row is tapped
-  void _showAppDialog(
-      BuildContext context, AppSelectViewModel vm, dynamic app) {
-    final monitored = vm.isAppMonitored(app.packageName);
-    final name = app.appName as String;
-    final pkg = app.packageName as String;
-
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: AppTheme.bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header tile
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppTheme.forest,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    _AppIcon(iconBase64: app.iconBase64, appName: name),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('APP', style: AppTheme.tileLabel),
-                          const SizedBox(height: 2),
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w900,
-                              color: AppTheme.onDark, letterSpacing: -0.5,
-                              height: 1.1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Package tile
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.cream2,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('PACKAGE', style: AppTheme.tileLabelDark),
-                    const SizedBox(height: 4),
-                    Text(
-                      pkg,
-                      style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w500,
-                        color: AppTheme.grey5,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Status tile
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: monitored
-                      ? AppTheme.forest.withOpacity(0.08)
-                      : AppTheme.cream2,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: monitored ? AppTheme.forest : AppTheme.lineColor,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      monitored
-                          ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked_rounded,
-                      size: 18,
-                      color: monitored ? AppTheme.forest : AppTheme.grey5,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      monitored ? 'Currently monitoring' : 'Not monitoring',
-                      style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700,
-                        color: monitored ? AppTheme.forest : AppTheme.grey5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Action button
-              GestureDetector(
-                onTap: () {
-                  vm.toggleApp(pkg);
-                  Navigator.of(context).pop();
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: monitored ? AppTheme.rust : AppTheme.forest,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    monitored ? 'Remove from Monitoring' : 'Add to Monitoring',
-                    style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w800,
-                      color: AppTheme.white, letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: const Center(
-                  child: Text('Cancel',
-                      style: TextStyle(
-                        fontSize: 13, color: AppTheme.grey5,
-                        fontWeight: FontWeight.w500,
-                      )),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
+    final vm = context.watch<AppSelectViewModel>();
+    final n = vm.monitoredApps.length;
     final pad = AppTheme.hPad(context);
-    final isTablet = MediaQuery.of(context).size.width >= 700;
 
-    return Consumer<AppSelectViewModel>(
-      builder: (context, vm, _) {
-        final filtered = _query.isEmpty
-            ? vm.installedApps
-            : vm.installedApps
-                .where((a) =>
-                    a.appName.toLowerCase().contains(_query.toLowerCase()) ||
-                    a.packageName.toLowerCase().contains(_query.toLowerCase()))
-                .toList();
-        final count = vm.monitoredApps.length;
+    final apps = vm.installedApps
+        .where((a) => _q.isEmpty || a.appName.toLowerCase().contains(_q) || a.packageName.toLowerCase().contains(_q))
+        .toList()
+      ..sort((a, b) {
+        final ma = vm.isAppMonitored(a.packageName), mb = vm.isAppMonitored(b.packageName);
+        if (ma != mb) return ma ? -1 : 1;
+        return a.appName.toLowerCase().compareTo(b.appName.toLowerCase());
+      });
 
-        return Container(
-          color: AppTheme.bg,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: top + 12),
-
-              // ── FocusPet banner ────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: pad),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.forest,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('FOCUSPET',
-                          style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w900,
-                            color: AppTheme.onDark, letterSpacing: 3.0,
-                          )),
-                      const Spacer(),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: count > 0
-                              ? AppTheme.rust
-                              : AppTheme.onDark.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '$count',
-                              style: const TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w900,
-                                color: AppTheme.white,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Text('selected',
-                                style: TextStyle(
-                                  fontSize: 9, fontWeight: FontWeight.w600,
-                                  color: AppTheme.white, letterSpacing: 1.0,
-                                )),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ── Search tile ────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: pad),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.cream2,
-                    borderRadius: BorderRadius.circular(16),
-                    border:
-                        Border.all(color: AppTheme.lineColor, width: 1),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.search_rounded,
-                          size: 18, color: AppTheme.grey5),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _ctrl,
-                          onChanged: (v) => setState(() => _query = v),
-                          style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700,
-                            color: AppTheme.black, letterSpacing: -0.3,
-                          ),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                            hintText: 'Search apps...',
-                            hintStyle: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w500,
-                              color: AppTheme.grey5.withOpacity(0.6),
-                            ),
-                          ),
-                          cursorColor: AppTheme.forest,
-                        ),
-                      ),
-                      if (_query.isNotEmpty)
-                        GestureDetector(
-                          onTap: () {
-                            _ctrl.clear();
-                            setState(() => _query = '');
-                          },
-                          child: Container(
-                            width: 24, height: 24,
-                            decoration: BoxDecoration(
-                              color: AppTheme.lineColor,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.close_rounded,
-                                size: 13, color: AppTheme.grey5),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ── App list ───────────────────────────────────────────────
-              Expanded(
-                child: vm.isLoading
-                    ? _loader()
-                    : filtered.isEmpty
-                        ? _empty(_query.isNotEmpty)
-                        : isTablet
-                            ? _tabletGrid(vm, filtered, pad)
-                            : _phoneList(vm, filtered, pad),
-              ),
-            ],
+    return ColoredBox(
+      color: AppTheme.bg,
+      child: SafeArea(
+        bottom: false,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(pad, 16, pad, 0),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                Text('Watch list', style: AppTheme.display(28)),
+                const Spacer(),
+                StickerChip(label: '$n selected', color: n > 0 ? AppTheme.accent400 : AppTheme.paper, tilt: 3),
+              ]),
+              const SizedBox(height: 14),
+              _searchField(),
+            ]),
           ),
-        );
-      },
+          const SizedBox(height: 14),
+          Expanded(child: _body(vm, apps, pad)),
+        ]),
+      ),
     );
   }
 
-  // Tablet: 2-column grid of app tiles
-  Widget _tabletGrid(
-      AppSelectViewModel vm, List<dynamic> apps, double pad) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: pad),
-      child: GridView.builder(
-        padding: const EdgeInsets.only(bottom: 24),
+  Widget _searchField() {
+    return Container(
+      padding: const EdgeInsets.only(left: 16, right: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.paper,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.ink, width: AppTheme.border),
+      ),
+      child: Row(children: [
+        const Icon(Icons.search_rounded, color: AppTheme.n700),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _search,
+            onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+            style: AppTheme.body(weight: FontWeight.w600),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              hintText: 'Find an app',
+              hintStyle: AppTheme.body(weight: FontWeight.w600, color: AppTheme.n600),
+            ),
+          ),
+        ),
+        if (_q.isNotEmpty)
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: AppTheme.ink),
+            onPressed: () => setState(() {
+              _search.clear();
+              _q = '';
+            }),
+          ),
+      ]),
+    );
+  }
+
+  Widget _body(AppSelectViewModel vm, List<InstalledApp> apps, double pad) {
+    if (vm.isLoading && vm.installedApps.isEmpty) {
+      return _StateMessage(vm: vm, title: 'Loading apps...', sub: 'Sniffing around your phone');
+    }
+    if (apps.isEmpty) {
+      return _q.isNotEmpty
+          ? _StateMessage(vm: vm, title: 'No Results.', sub: 'Nothing matches "$_q"')
+          : _StateMessage(vm: vm, title: 'No Apps.', sub: 'Pull down to try again', onRetry: vm.refresh);
+    }
+
+    final isTablet = MediaQuery.of(context).size.width >= 700;
+    final padding = EdgeInsets.fromLTRB(pad, 0, pad, 130);
+
+    if (isTablet) {
+      return GridView.builder(
+        padding: padding,
+        itemCount: apps.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          crossAxisSpacing: 10,
           mainAxisSpacing: 10,
-          childAspectRatio: 3.5,
+          crossAxisSpacing: 10,
+          mainAxisExtent: 124,
         ),
-        itemCount: apps.length,
-        itemBuilder: (ctx, i) => _row(vm, apps[i], i),
-      ),
-    );
-  }
-
-  // Phone: single list
-  Widget _phoneList(
-      AppSelectViewModel vm, List<dynamic> apps, double pad) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: pad),
-      child: ListView.builder(
-        padding: const EdgeInsets.only(bottom: 120),
-        itemCount: apps.length,
-        itemBuilder: (ctx, i) => _row(vm, apps[i], i),
-      ),
-    );
-  }
-
-  Widget _loader() => const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 20, height: 20,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppTheme.forest),
-            ),
-            SizedBox(height: 14),
-            Text('Loading apps...', style: AppTheme.metaLabel),
-          ],
-        ),
+        itemBuilder: (_, i) => _AppTile(app: apps[i], monitored: vm.isAppMonitored(apps[i].packageName), compact: true, onTap: () => _showDetail(vm, apps[i])),
       );
+    }
+    return RefreshIndicator(
+      color: AppTheme.accent600,
+      onRefresh: vm.refresh,
+      child: ListView.separated(
+        padding: padding,
+        itemCount: apps.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (_, i) => _AppTile(app: apps[i], monitored: vm.isAppMonitored(apps[i].packageName), onTap: () => _showDetail(vm, apps[i])),
+      ),
+    );
+  }
 
-  Widget _empty(bool searching) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 64, height: 64,
+  Future<void> _showDetail(AppSelectViewModel vm, InstalledApp app) {
+    return showDialog(
+      context: context,
+      barrierColor: AppTheme.ink.withOpacity(0.45),
+      builder: (ctx) => ChangeNotifierProvider.value(
+        value: vm,
+        child: Consumer<AppSelectViewModel>(builder: (ctx, vm, _) {
+          final on = vm.isAppMonitored(app.packageName);
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: AppTheme.cream2,
-                borderRadius: BorderRadius.circular(20),
+                color: AppTheme.bg,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: AppTheme.ink, width: AppTheme.border),
+                boxShadow: const [BoxShadow(color: AppTheme.ink, offset: Offset(6, 6))],
               ),
-              child: const Icon(Icons.search_off_rounded,
-                  size: 28, color: AppTheme.grey5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              searching ? 'No Results.' : 'No Apps.',
-              style: const TextStyle(
-                fontSize: 26, fontWeight: FontWeight.w900,
-                color: AppTheme.black, letterSpacing: -1.0,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              searching ? 'Try a different term' : 'No launchable apps found',
-              style: AppTheme.metaLabel,
-            ),
-          ],
-        ),
-      );
-
-  Widget _row(AppSelectViewModel vm, dynamic app, int index) {
-    final monitored = vm.isAppMonitored(app.packageName);
-    final tileColors = [AppTheme.cream2, AppTheme.bg, AppTheme.mint];
-    final bgColor = monitored
-        ? AppTheme.forest.withOpacity(0.08)
-        : tileColors[index % tileColors.length];
-
-    return GestureDetector(
-      onTap: () => _showAppDialog(context, vm, app),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-          border: monitored
-              ? Border.all(color: AppTheme.forest, width: 1.5)
-              : Border.all(color: AppTheme.lineColor, width: 1),
-        ),
-        child: Row(
-          children: [
-            _AppIcon(iconBase64: app.iconBase64, appName: app.appName),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    app.appName,
-                    style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700,
-                      color: AppTheme.black, letterSpacing: -0.2,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: const BoxDecoration(
+                    color: AppTheme.sage500,
+                    border: Border(bottom: BorderSide(color: AppTheme.ink, width: AppTheme.border)),
                   ),
-                  Text(
-                    monitored
-                        ? '● Monitoring'
-                        : app.packageName.split('.').last,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight:
-                          monitored ? FontWeight.w700 : FontWeight.w400,
-                      color: monitored ? AppTheme.forest : AppTheme.grey5,
-                      letterSpacing: monitored ? 0.3 : 0,
+                  child: Row(children: [
+                    _AppIcon(app: app, size: 56),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(app.appName, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.display(26))),
+                  ]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(color: AppTheme.surface, borderRadius: BorderRadius.circular(16)),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('PACKAGE', style: AppTheme.kicker()),
+                        const SizedBox(height: 2),
+                        Text(app.packageName, style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: AppTheme.ink)),
+                      ]),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: on ? AppTheme.sage500 : AppTheme.n300,
+                          border: Border.all(color: AppTheme.ink, width: 2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(on ? 'Currently monitoring' : 'Not monitoring', style: AppTheme.body(weight: FontWeight.w800)),
+                    ]),
+                    const SizedBox(height: 12),
+                    Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      petSprite(vm.prefs.selectedPet, 52),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SpeechBubble(
+                            on ? "Remove it and I'll stop showing up here." : "Add it and I'll keep an eye on it for you.",
+                            fontSize: 13.5,
+                            shadow: 0,
+                          ),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    PushButton(
+                      label: on ? 'Remove from Monitoring' : 'Add to Monitoring',
+                      color: on ? AppTheme.accent600 : AppTheme.sage500,
+                      textColor: on ? Colors.white : AppTheme.ink,
+                      fontSize: 17,
+                      onTap: () async {
+                        await vm.toggleApp(app.packageName);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('Cancel', style: AppTheme.body(size: 14, weight: FontWeight.w800, color: AppTheme.n700)),
+                    ),
+                  ]),
+                ),
+              ]),
             ),
-            // Tap hint arrow
-            Icon(Icons.chevron_right_rounded,
-                size: 18,
-                color: monitored
-                    ? AppTheme.forest
-                    : AppTheme.grey5.withOpacity(0.5)),
-          ],
-        ),
+          );
+        }),
       ),
     );
   }
 }
 
-class _AppIcon extends StatelessWidget {
-  final String? iconBase64;
-  final String appName;
-  const _AppIcon({required this.iconBase64, required this.appName});
+class _AppTile extends StatelessWidget {
+  const _AppTile({required this.app, required this.monitored, required this.onTap, this.compact = false});
+  final InstalledApp app;
+  final bool monitored;
+  final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    if (iconBase64 != null && iconBase64!.isNotEmpty) {
-      try {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.memory(
-            base64Decode(iconBase64!),
-            width: 40, height: 40,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _letter(),
-          ),
-        );
-      } catch (_) {}
-    }
-    return _letter();
-  }
+    final status = monitored
+        ? Text('● Monitoring', style: AppTheme.body(size: 12.5, weight: FontWeight.w800, color: AppTheme.sage800))
+        : Text(app.packageName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTheme.body(size: 12, color: AppTheme.n600));
+    final title = Text(app.appName, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.body(weight: FontWeight.w800));
 
-  Widget _letter() {
-    final colors = [
-      AppTheme.rust, AppTheme.mustard, AppTheme.forest,
-      AppTheme.clay, AppTheme.olive, AppTheme.sage,
-    ];
-    final color = colors[appName.isNotEmpty
-        ? appName.codeUnitAt(0) % colors.length
-        : 0];
+    return Sticker(
+      color: monitored ? AppTheme.sage200 : AppTheme.paper,
+      borderColor: monitored ? AppTheme.ink : AppTheme.n300,
+      shadow: monitored ? 3 : 0,
+      padding: compact ? const EdgeInsets.all(10) : const EdgeInsets.fromLTRB(8, 8, 12, 8),
+      onTap: onTap,
+      child: compact
+          ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _AppIcon(app: app),
+              const SizedBox(height: 6),
+              title,
+              status,
+            ])
+          : Row(children: [
+              _AppIcon(app: app),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title, status])),
+              const Icon(Icons.chevron_right_rounded, color: AppTheme.ink),
+            ]),
+    );
+  }
+}
+
+class _AppIcon extends StatelessWidget {
+  const _AppIcon({required this.app, this.size = 42});
+  final InstalledApp app;
+  final double size;
+
+  static const _palette = [AppTheme.accent300, AppTheme.accent400, AppTheme.sage300, AppTheme.surface, AppTheme.accent200];
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _iconBytes(app);
+    final letter = app.appName.isEmpty ? '?' : app.appName[0].toUpperCase();
     return Container(
-      width: 40, height: 40,
-      decoration: BoxDecoration(
-        color: color, borderRadius: BorderRadius.circular(10),
-      ),
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
-      child: Text(
-        appName.isNotEmpty ? appName[0].toUpperCase() : '?',
-        style: const TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.white,
-        ),
+      decoration: BoxDecoration(
+        color: bytes == null ? _palette[app.packageName.hashCode.abs() % _palette.length] : AppTheme.paper,
+        borderRadius: BorderRadius.circular(size * 0.32),
+        border: Border.all(color: AppTheme.ink, width: 2.5),
+      ),
+      child: bytes != null
+          ? Image.memory(bytes, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true)
+          : Text(letter, style: AppTheme.display(size * 0.4)),
+    );
+  }
+}
+
+class _StateMessage extends StatelessWidget {
+  const _StateMessage({required this.vm, required this.title, required this.sub, this.onRetry});
+  final AppSelectViewModel vm;
+  final String title;
+  final String sub;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 120),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          petSprite(vm.prefs.selectedPet, 96),
+          const SizedBox(height: 10),
+          Text(title, style: AppTheme.display(24)),
+          const SizedBox(height: 4),
+          Text(sub, style: AppTheme.body(size: 14, color: AppTheme.n700)),
+          if (onRetry != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(width: 160, child: PushButton(label: 'Try again', fontSize: 16, depth: 4, onTap: () => onRetry!())),
+          ],
+        ]),
       ),
     );
   }

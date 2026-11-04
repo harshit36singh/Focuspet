@@ -9,29 +9,32 @@ import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'pet_select_screen.dart';
 import 'app_select_screen.dart';
+import 'onboarding_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({Key? key}) : super(key: key);
+  const MainScreen({super.key});
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   int _idx = 0;
-
+  late final AppPreferences _prefs;
   late final HomeViewModel _homeVM;
   late final PetSelectViewModel _petVM;
   late final AppSelectViewModel _appVM;
+  late bool _named;
 
   @override
   void initState() {
     super.initState();
-    final prefs = context.read<AppPreferences>();
+    _prefs = context.read<AppPreferences>();
     final platform = context.read<PlatformService>();
-    _homeVM = HomeViewModel(prefs: prefs, platform: platform);
-    _petVM = PetSelectViewModel(prefs: prefs, platform: platform);
-    _appVM = AppSelectViewModel(prefs: prefs, platform: platform);
+    _homeVM = HomeViewModel(prefs: _prefs, platform: platform);
+    _petVM = PetSelectViewModel(prefs: _prefs, platform: platform);
+    _appVM = AppSelectViewModel(prefs: _prefs, platform: platform);
     _homeVM.onPermissionsGranted = () => _appVM.prefetchApps();
+    _named = _prefs.petName.isNotEmpty;
   }
 
   @override
@@ -51,170 +54,99 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_named) {
+      return OnboardingScreen(
+        pet: _prefs.selectedPet,
+        onDone: (name) async {
+          await _homeVM.setPetName(name);
+          if (mounted) setState(() => _named = true);
+        },
+      );
+    }
     return _isTablet ? _buildTablet() : _buildPhone();
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // TABLET: side-by-side 3-panel bento layout (all screens visible)
-  // ══════════════════════════════════════════════════════════════════════
+  // Tablet: all three screens side by side.
   Widget _buildTablet() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _appVM.ensureLoaded());
+    Widget divider() => Container(width: AppTheme.border, color: AppTheme.ink);
     return Scaffold(
       backgroundColor: AppTheme.bg,
-      body: Row(
-        children: [
-          // Panel 1: Home
-          Expanded(
-            flex: 3,
-            child: ClipRect(
-              child: ChangeNotifierProvider.value(
-                value: _homeVM,
-                child: const HomeScreen(),
-              ),
-            ),
-          ),
-          // Divider
-          Container(width: 1, color: AppTheme.lineColor),
-          // Panel 2: Pet select
-          Expanded(
-            flex: 3,
-            child: ClipRect(
-              child: ChangeNotifierProvider.value(
-                value: _petVM,
-                child: const PetSelectScreen(),
-              ),
-            ),
-          ),
-          // Divider
-          Container(width: 1, color: AppTheme.lineColor),
-          // Panel 3: App select
-          Expanded(
-            flex: 3,
-            child: ClipRect(
-              child: ChangeNotifierProvider.value(
-                value: _appVM,
-                child: TickerMode(
-                  enabled: true,
-                  child: Builder(
-                    builder: (ctx) {
-                      // Ensure apps load when tablet layout is shown
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _appVM.ensureLoaded();
-                      });
-                      return const AppSelectScreen();
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      body: Row(children: [
+        Expanded(child: ClipRect(child: ChangeNotifierProvider.value(value: _homeVM, child: const HomeScreen()))),
+        divider(),
+        Expanded(child: ClipRect(child: ChangeNotifierProvider.value(value: _petVM, child: const PetSelectScreen()))),
+        divider(),
+        Expanded(child: ClipRect(child: ChangeNotifierProvider.value(value: _appVM, child: const AppSelectScreen()))),
+      ]),
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // PHONE: indexed stack with floating bento navbar
-  // ══════════════════════════════════════════════════════════════════════
+  // Phone: indexed stack + floating ink pill navbar.
   Widget _buildPhone() {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-
     return Scaffold(
       backgroundColor: AppTheme.bg,
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _idx,
-            children: [
-              ChangeNotifierProvider.value(
-                value: _homeVM,
-                child: RepaintBoundary(
-                  child: TickerMode(
-                      enabled: _idx == 0, child: const HomeScreen()),
-                ),
-              ),
-              ChangeNotifierProvider.value(
-                value: _petVM,
-                child: RepaintBoundary(
-                  child: TickerMode(
-                      enabled: _idx == 1, child: const PetSelectScreen()),
-                ),
-              ),
-              ChangeNotifierProvider.value(
-                value: _appVM,
-                child: RepaintBoundary(
-                  child: TickerMode(
-                      enabled: _idx == 2, child: const AppSelectScreen()),
-                ),
-              ),
-            ],
+      body: Stack(children: [
+        IndexedStack(index: _idx, children: [
+          ChangeNotifierProvider.value(
+            value: _homeVM,
+            child: TickerMode(enabled: _idx == 0, child: const HomeScreen()),
           ),
-
-          // ── Floating bento navbar ──────────────────────────────────────
-          Positioned(
-            bottom: bottomPad + 18,
-            left: 0, right: 0,
-            child: Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.black,
-                  borderRadius: BorderRadius.circular(100),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.black.withOpacity(0.40),
-                      blurRadius: 32, offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(5),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _pill(0, Icons.home_rounded, Icons.home_outlined,
-                        'Home', AppTheme.rust),
-                    const SizedBox(width: 3),
-                    _pill(1, Icons.pets, Icons.pets_outlined,
-                        'Pet', AppTheme.mustard),
-                    const SizedBox(width: 3),
-                    _pill(2, Icons.apps_rounded, Icons.apps_outlined,
-                        'Apps', AppTheme.sage),
-                  ],
-                ),
+          ChangeNotifierProvider.value(
+            value: _petVM,
+            child: TickerMode(enabled: _idx == 1, child: const PetSelectScreen()),
+          ),
+          ChangeNotifierProvider.value(
+            value: _appVM,
+            child: TickerMode(enabled: _idx == 2, child: const AppSelectScreen()),
+          ),
+        ]),
+        Positioned(
+          bottom: bottomPad + 18,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.ink,
+                borderRadius: BorderRadius.circular(100),
+                boxShadow: [BoxShadow(color: AppTheme.ink.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 10))],
               ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _pill(0, Icons.home_rounded, 'Home', AppTheme.accent),
+                const SizedBox(width: 4),
+                _pill(1, Icons.pets, 'Pet', AppTheme.sage400),
+                const SizedBox(width: 4),
+                _pill(2, Icons.apps_rounded, 'Apps', AppTheme.accent300),
+              ]),
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
-  Widget _pill(
-      int i, IconData on, IconData off, String label, Color accent) {
+  Widget _pill(int i, IconData icon, String label, Color color) {
     final active = _idx == i;
     return GestureDetector(
       onTap: () => _onTab(i),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeInOut,
-        padding: EdgeInsets.symmetric(
-            horizontal: active ? 20 : 15, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: active ? 18 : 13, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? accent : Colors.transparent,
+          color: active ? color : Colors.transparent,
           borderRadius: BorderRadius.circular(100),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(active ? on : off, size: 18,
-                color: active ? AppTheme.white : const Color(0xFF555555)),
-            if (active) ...[
-              const SizedBox(width: 6),
-              Text(label, style: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w800,
-                color: AppTheme.white, letterSpacing: -0.2,
-              )),
-            ],
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 20, color: active ? AppTheme.ink : AppTheme.n300),
+          if (active) ...[
+            const SizedBox(width: 6),
+            Text(label, style: AppTheme.display(15)),
           ],
-        ),
+        ]),
       ),
     );
   }
